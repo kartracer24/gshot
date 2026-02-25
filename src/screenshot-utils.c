@@ -28,6 +28,11 @@
 
 #include "screenshot-backend-shell.h"
 
+#ifdef HAVE_WAYLAND
+#include "screenshot-backend-wayland.h"
+#include <gdk/gdkwayland.h>
+#endif
+
 #ifdef HAVE_X11
 #include "screenshot-backend-x11.h"
 #endif
@@ -38,6 +43,9 @@ screenshot_get_pixbuf (GdkRectangle *rectangle)
   GdkPixbuf *screenshot = NULL;
   gboolean force_fallback = FALSE;
   g_autoptr (ScreenshotBackend) backend = NULL;
+  GdkDisplay *display;
+
+  display = gdk_display_get_default ();
 
 #ifdef HAVE_X11
   force_fallback = g_getenv ("GNOME_SCREENSHOT_FORCE_FALLBACK") != NULL;
@@ -45,27 +53,65 @@ screenshot_get_pixbuf (GdkRectangle *rectangle)
 
   if (!force_fallback)
     {
-      backend = screenshot_backend_shell_new ();
-      screenshot = screenshot_backend_get_pixbuf (backend, rectangle);
-      if (!screenshot)
-#ifdef HAVE_X11
-        g_message ("Unable to use GNOME Shell's builtin screenshot interface, "
-                   "resorting to fallback X11.");
-#else
-        g_message ("Unable to use GNOME Shell's builtin screenshot interface.");
+      /* Try Wayland wlr-screencopy first if on Wayland */
+#ifdef HAVE_WAYLAND
+      if (GDK_IS_WAYLAND_DISPLAY (display))
+        {
+          backend = screenshot_backend_wayland_new ();
+          screenshot = screenshot_backend_get_pixbuf (backend, rectangle);
+          if (!screenshot)
+            {
+              g_message ("wlr-screencopy backend failed, "
+                         "attempting fallback methods...");
+            }
+          else
+            {
+              return screenshot;
+            }
+        }
 #endif
-  }
+
+      /* Fall back to X11 */
+#ifdef HAVE_X11
+      if (!screenshot)
+        {
+          g_clear_object (&backend);
+          backend = screenshot_backend_x11_new ();
+          screenshot = screenshot_backend_get_pixbuf (backend, rectangle);
+          if (!screenshot)
+            {
+              g_message ("X11 fallback failed, trying GNOME Shell DBus...");
+            }
+          else
+            {
+              return screenshot;
+            }
+        }
+#endif
+
+      /* Final fallback to GNOME Shell DBus */
+      if (!screenshot)
+        {
+          g_clear_object (&backend);
+          backend = screenshot_backend_shell_new ();
+          screenshot = screenshot_backend_get_pixbuf (backend, rectangle);
+          if (!screenshot)
+            g_message ("All screenshot backends failed");
+        }
+    }
   else
-    g_message ("Using fallback X11 as requested");
+    {
+      g_message ("Using fallback methods as requested");
 
 #ifdef HAVE_X11
-  if (!screenshot)
-    {
-      g_clear_object (&backend);
-      backend = screenshot_backend_x11_new ();
-      screenshot = screenshot_backend_get_pixbuf (backend, rectangle);
-    }
+      if (!screenshot)
+        {
+          g_clear_object (&backend);
+          backend = screenshot_backend_x11_new ();
+          screenshot = screenshot_backend_get_pixbuf (backend, rectangle);
+        }
 #endif
+    }
 
   return screenshot;
 }

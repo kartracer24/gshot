@@ -12,6 +12,7 @@ project(
 )
 
 add_project_arguments([
+  '-D_GNU_SOURCE',
   '-D_POSIX_C_SOURCE=200809L',
   '-D_XOPEN_SOURCE=700',
   '-D_DEFAULT_SOURCE'
@@ -36,6 +37,8 @@ libhandy_req_version = '>= 1.5.0'
 mathlib_dep = cc.find_library('m', required: false)
 x11_dep = dependency('x11', required: get_option ('x11'))
 xext_dep = dependency('xext', required: get_option ('x11'))
+wayland_client_dep = dependency('wayland-client', required: false)
+wayland_protocols_dep = dependency('wayland-protocols', required: false)
 glib_dep = dependency('glib-2.0', version: glib_req_version)
 gtk_dep = dependency('gtk+-3.0', version: gtk_req_version)
 libhandy_dep = dependency('libhandy-1', version: libhandy_req_version)
@@ -53,10 +56,16 @@ if has_x11
   endif
 endif
 
+has_wayland = wayland_client_dep.found() and wayland_protocols_dep.found()
+if has_wayland
+  config_h.set('HAVE_WAYLAND', 1)
+endif
+
 configure_file(output: 'config.h', configuration: config_h)
 
 root_inc = include_directories('.')
 
+fs = import('fs')
 i18n = import('i18n')
 
 subdir('data')
