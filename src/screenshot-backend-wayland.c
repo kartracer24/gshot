@@ -53,6 +53,7 @@ typedef struct
   uint32_t width;
   uint32_t height;
   uint32_t format;
+  uint32_t stride;
   gboolean constraints_done;
 
   GdkPixbuf *pixbuf;
@@ -85,11 +86,17 @@ registry_handle_global (void *data,
       if (state->output == NULL)
         state->output = wl_registry_bind (registry, name, &wl_output_interface, 1);
     }
-  else if (g_strcmp0 (interface, "zwlr_screencopy_manager_v1") == 0)
+  else if (g_strcmp0 (interface, ext_image_copy_capture_manager_v1_interface.name) == 0)
     {
-      state->screencopy_manager = wl_registry_bind (registry, name,
-                                                     &zwlr_screencopy_manager_v1_interface,
-                                                     version);
+      state->image_copy_capture_manager = wl_registry_bind (registry, name,
+                                                            &ext_image_copy_capture_manager_v1_interface,
+                                                            1);
+    }
+  else if (g_strcmp0 (interface, ext_output_image_capture_source_manager_v1_interface.name) == 0)
+    {
+      state->output_source_manager = wl_registry_bind (registry, name,
+                                                       &ext_output_image_capture_source_manager_v1_interface,
+                                                       1);
     }
 }
 
@@ -105,115 +112,169 @@ static const struct wl_registry_listener registry_listener = {
   registry_handle_global_remove,
 };
 
-/* Screencopy frame listener callbacks */
+/* Session listener callbacks */
 static void
-screencopy_frame_handle_buffer (void *data,
-                                struct zwlr_screencopy_frame_v1 *frame,
-                                uint32_t format,
-                                uint32_t width,
-                                uint32_t height,
-                                uint32_t stride)
+session_handle_buffer_size (void *data,
+                            struct ext_image_copy_capture_session_v1 *session,
+                            uint32_t width,
+                            uint32_t height)
 {
   WaylandState *state = (WaylandState *)data;
-  struct wl_shm_pool *pool;
-  int fd;
-  int size;
-  void *shm_data;
-  struct wl_buffer *buffer;
+  state->width = width;
+  state->height = height;
+}
 
-  size = stride * height;
+static void
+session_handle_shm_format (void *data,
+                           struct ext_image_copy_capture_session_v1 *session,
+                           uint32_t format)
+{
+  WaylandState *state = (WaylandState *)data;
+  /* We prefer ARGB8888 or XRGB8888 for GdkPixbuf */
+  if (state->format == 0 || format == WL_SHM_FORMAT_ARGB8888)
+    state->format = format;
+}
+
+static void
+session_handle_dmabuf_device (void *data,
+                              struct ext_image_copy_capture_session_v1 *session,
+                              struct wl_array *device)
+{
+}
+
+static void
+session_handle_dmabuf_format (void *data,
+                              struct ext_image_copy_capture_session_v1 *session,
+                              uint32_t format,
+                              struct wl_array *modifiers)
+{
+}
+
+static void
+session_handle_done (void *data,
+                     struct ext_image_copy_capture_session_v1 *session)
+{
+  WaylandState *state = (WaylandState *)data;
+  state->constraints_done = TRUE;
+}
+
+static void
+session_handle_stopped (void *data,
+                        struct ext_image_copy_capture_session_v1 *session)
+{
+  WaylandState *state = (WaylandState *)data;
+  state->done = TRUE;
+  if (state->loop)
+    g_main_loop_quit (state->loop);
+}
+
+static const struct ext_image_copy_capture_session_v1_listener session_listener = {
+  session_handle_buffer_size,
+  session_handle_shm_format,
+  session_handle_dmabuf_device,
+  session_handle_dmabuf_format,
+  session_handle_done,
+  session_handle_stopped,
+};
+
+/* Frame listener callbacks */
+static void
+frame_handle_transform (void *data,
+                        struct ext_image_copy_capture_frame_v1 *frame,
+                        uint32_t transform)
+{
+}
+
+static void
+frame_handle_damage (void *data,
+                     struct ext_image_copy_capture_frame_v1 *frame,
+                     int32_t x,
+                     int32_t y,
+                     int32_t width,
+                     int32_t height)
+{
+}
+
+static void
+frame_handle_presentation_time (void *data,
+                                struct ext_image_copy_capture_frame_v1 *frame,
+                                uint32_t tv_sec_hi,
+                                uint32_t tv_sec_lo,
+                                uint32_t tv_nsec)
+{
+}
+
+static void
+frame_handle_ready (void *data,
+                    struct ext_image_copy_capture_frame_v1 *frame)
+{
+  WaylandState *state = (WaylandState *)data;
+  state->done = TRUE;
+  if (state->loop)
+    g_main_loop_quit (state->loop);
+}
+
+static void
+frame_handle_failed (void *data,
+                     struct ext_image_copy_capture_frame_v1 *frame,
+                     uint32_t reason)
+{
+  WaylandState *state = (WaylandState *)data;
+  g_message ("Frame capture failed with reason %u", reason);
+  state->done = TRUE;
+  if (state->loop)
+    g_main_loop_quit (state->loop);
+}
+
+static const struct ext_image_copy_capture_frame_v1_listener frame_listener = {
+  frame_handle_transform,
+  frame_handle_damage,
+  frame_handle_presentation_time,
+  frame_handle_ready,
+  frame_handle_failed,
+};
+
+static struct wl_buffer *
+create_shm_buffer (WaylandState *state, void **out_data, size_t *out_size)
+{
+  struct wl_shm_pool *pool;
+  struct wl_buffer *buffer;
+  int fd;
+  void *data;
+  size_t size;
+  uint32_t stride;
+
+  stride = state->width * 4;
+  size = stride * state->height;
+
   fd = memfd_create ("gnome-screenshot", MFD_CLOEXEC);
   if (fd < 0)
-    {
-      g_message ("Failed to create memfd");
-      return;
-    }
+    return NULL;
 
   if (ftruncate (fd, size) < 0)
     {
-      g_message ("Failed to truncate memfd");
       close (fd);
-      return;
+      return NULL;
     }
 
-  shm_data = mmap (NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-  if (shm_data == MAP_FAILED)
+  data = mmap (NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+  if (data == MAP_FAILED)
     {
-      g_message ("Failed to mmap shared memory");
       close (fd);
-      return;
+      return NULL;
     }
 
   pool = wl_shm_create_pool (state->shm, fd, size);
-  buffer = wl_shm_pool_create_buffer (pool, 0, width, height, stride, WL_SHM_FORMAT_ARGB8888);
+  buffer = wl_shm_pool_create_buffer (pool, 0, state->width, state->height, stride, state->format);
   wl_shm_pool_destroy (pool);
   close (fd);
 
-  zwlr_screencopy_frame_v1_copy (frame, buffer);
-  wl_buffer_add_listener (buffer, NULL, NULL);
+  *out_data = data;
+  *out_size = size;
+  state->stride = stride;
 
-  /* Convert raw pixel data to GdkPixbuf */
-  state->pixbuf = gdk_pixbuf_new_from_data ((const guchar *)shm_data,
-                                            GDK_COLORSPACE_RGB,
-                                            TRUE,  /* has_alpha */
-                                            8,     /* bits_per_sample */
-                                            width,
-                                            height,
-                                            stride,
-                                            NULL,
-                                            NULL);
-
-  if (state->pixbuf)
-    {
-      /* Make a copy so we own the data */
-      GdkPixbuf *copy = gdk_pixbuf_copy (state->pixbuf);
-      g_object_unref (state->pixbuf);
-      state->pixbuf = copy;
-    }
-
-  munmap (shm_data, size);
-  wl_buffer_destroy (buffer);
+  return buffer;
 }
-
-static void
-screencopy_frame_handle_flags (void *data,
-                               struct zwlr_screencopy_frame_v1 *frame,
-                               uint32_t flags)
-{
-}
-
-static void
-screencopy_frame_handle_ready (void *data,
-                               struct zwlr_screencopy_frame_v1 *frame,
-                               uint32_t tv_sec_hi,
-                               uint32_t tv_sec_lo,
-                               uint32_t tv_nsec)
-{
-  WaylandState *state = (WaylandState *)data;
-  state->done = TRUE;
-  if (state->loop)
-    g_main_loop_quit (state->loop);
-  zwlr_screencopy_frame_v1_destroy (frame);
-}
-
-static void
-screencopy_frame_handle_failed (void *data,
-                                struct zwlr_screencopy_frame_v1 *frame)
-{
-  WaylandState *state = (WaylandState *)data;
-  g_message ("Screencopy frame failed");
-  state->done = TRUE;
-  if (state->loop)
-    g_main_loop_quit (state->loop);
-  zwlr_screencopy_frame_v1_destroy (frame);
-}
-
-static const struct zwlr_screencopy_frame_v1_listener screencopy_frame_listener = {
-  screencopy_frame_handle_buffer,
-  screencopy_frame_handle_flags,
-  screencopy_frame_handle_ready,
-  screencopy_frame_handle_failed,
-};
 
 static gboolean
 screenshot_backend_wayland_is_available (void)
@@ -222,55 +283,130 @@ screenshot_backend_wayland_is_available (void)
   return GDK_IS_WAYLAND_DISPLAY (display);
 }
 
+static void
+swizzle_bgra_to_rgba (uint8_t *data, uint32_t width, uint32_t height, uint32_t stride, gboolean has_alpha)
+{
+  for (uint32_t y = 0; y < height; y++)
+    {
+      uint8_t *row = &data[y * stride];
+      for (uint32_t x = 0; x < width; x++)
+        {
+          uint8_t *pixel = &row[x * 4];
+          uint8_t b = pixel[0];
+          uint8_t g = pixel[1];
+          uint8_t r = pixel[2];
+          pixel[0] = r;
+          pixel[1] = g;
+          pixel[2] = b;
+          if (!has_alpha)
+            pixel[3] = 0xff;
+        }
+    }
+}
+
 static GdkPixbuf *
 screenshot_backend_wayland_capture_screen (WaylandState *state,
                                            GdkRectangle *rectangle)
 {
-  struct zwlr_screencopy_frame_v1 *frame;
+  struct wl_buffer *buffer = NULL;
+  void *shm_data = NULL;
+  size_t shm_size = 0;
+  uint32_t options = 0;
 
-  if (!state->screencopy_manager || !state->output)
+  if (!state->image_copy_capture_manager || !state->output_source_manager || !state->output)
     {
-      g_message ("wlr-screencopy not available on this Wayland compositor");
+      g_message ("Required Wayland interfaces not available");
       return NULL;
     }
 
-  /* For now, capture the full output ignoring rectangle parameter */
-  /* TODO: Implement area capture by modifying Wayland protocol usage */
-  frame = zwlr_screencopy_manager_v1_capture_output (state->screencopy_manager,
-                                                     0, /* overlay_cursor */
-                                                     state->output);
+  if (screenshot_config->include_pointer)
+    options |= EXT_IMAGE_COPY_CAPTURE_MANAGER_V1_OPTIONS_PAINT_CURSORS;
 
-  if (!frame)
-    {
-      g_message ("Failed to create screencopy frame");
-      return NULL;
-    }
-
-  zwlr_screencopy_frame_v1_add_listener (frame, &screencopy_frame_listener, state);
-
-  /* Run main loop until frame is ready */
-  state->done = FALSE;
-  state->loop = g_main_loop_new (NULL, FALSE);
+  /* 1. Create source */
+  state->source = ext_output_image_capture_source_manager_v1_create_source (state->output_source_manager, state->output);
   
-  /* Process events */
-  wl_display_roundtrip (state->display);
+  /* 2. Create session */
+  state->session = ext_image_copy_capture_manager_v1_create_session (state->image_copy_capture_manager,
+                                                                    state->source,
+                                                                    options);
+  ext_image_copy_capture_session_v1_add_listener (state->session, &session_listener, state);
 
-  /* Wait for frame with timeout */
-  if (!state->done)
+  /* 3. Wait for constraints */
+  state->constraints_done = FALSE;
+  while (!state->constraints_done)
     {
-      guint timeout_id = g_timeout_add (5000, (GSourceFunc) g_main_loop_quit, state->loop);
-      g_main_loop_run (state->loop);
-      g_source_remove (timeout_id);
+      if (wl_display_dispatch (state->display) < 0)
+        break;
     }
 
-  if (!state->done)
+  if (!state->constraints_done)
     {
-      g_message ("Wayland screencopy timed out after 5 seconds");
-      zwlr_screencopy_frame_v1_destroy (frame);
+      g_message ("Failed to get buffer constraints");
+      return NULL;
     }
 
-  g_main_loop_unref (state->loop);
-  state->loop = NULL;
+  /* 4. Create frame */
+  state->frame = ext_image_copy_capture_session_v1_create_frame (state->session);
+  ext_image_copy_capture_frame_v1_add_listener (state->frame, &frame_listener, state);
+
+  /* 5. Create buffer */
+  buffer = create_shm_buffer (state, &shm_data, &shm_size);
+  if (!buffer)
+    {
+      g_message ("Failed to create SHM buffer");
+      return NULL;
+    }
+
+  /* 6. Capture */
+  ext_image_copy_capture_frame_v1_attach_buffer (state->frame, buffer);
+  ext_image_copy_capture_frame_v1_damage_buffer (state->frame, 0, 0, state->width, state->height);
+  ext_image_copy_capture_frame_v1_capture (state->frame);
+
+  /* 7. Wait for ready */
+  state->done = FALSE;
+  while (!state->done)
+    {
+      if (wl_display_dispatch (state->display) < 0)
+        break;
+    }
+
+  if (state->done && shm_data)
+    {
+      swizzle_bgra_to_rgba (shm_data, state->width, state->height, state->stride,
+                            state->format == WL_SHM_FORMAT_ARGB8888);
+
+      /* Convert raw pixel data to GdkPixbuf */
+      state->pixbuf = gdk_pixbuf_new_from_data ((const guchar *)shm_data,
+                                                GDK_COLORSPACE_RGB,
+                                                TRUE,  /* has_alpha */
+                                                8,     /* bits_per_sample */
+                                                state->width,
+                                                state->height,
+                                                state->stride,
+                                                NULL,
+                                                NULL);
+
+      if (state->pixbuf)
+        {
+          /* Make a copy so we own the data */
+          GdkPixbuf *copy = gdk_pixbuf_copy (state->pixbuf);
+          g_object_unref (state->pixbuf);
+          state->pixbuf = copy;
+        }
+
+      if (state->pixbuf && rectangle)
+        {
+          GdkPixbuf *cropped = gdk_pixbuf_new (GDK_COLORSPACE_RGB, TRUE, 8, rectangle->width, rectangle->height);
+          gdk_pixbuf_copy_area (state->pixbuf, rectangle->x, rectangle->y, rectangle->width, rectangle->height, cropped, 0, 0);
+          g_object_unref (state->pixbuf);
+          state->pixbuf = cropped;
+        }
+    }
+
+  if (shm_data)
+    munmap (shm_data, shm_size);
+  if (buffer)
+    wl_buffer_destroy (buffer);
 
   return state->pixbuf;
 }
@@ -278,16 +414,22 @@ screenshot_backend_wayland_capture_screen (WaylandState *state,
 static void
 screenshot_backend_wayland_cleanup (WaylandState *state)
 {
-  if (state->screencopy_manager)
-    zwlr_screencopy_manager_v1_destroy (state->screencopy_manager);
+  if (state->frame)
+    ext_image_copy_capture_frame_v1_destroy (state->frame);
+  if (state->session)
+    ext_image_copy_capture_session_v1_destroy (state->session);
+  if (state->source)
+    ext_image_capture_source_v1_destroy (state->source);
+  if (state->image_copy_capture_manager)
+    ext_image_copy_capture_manager_v1_destroy (state->image_copy_capture_manager);
+  if (state->output_source_manager)
+    ext_output_image_capture_source_manager_v1_destroy (state->output_source_manager);
   if (state->output)
     wl_output_destroy (state->output);
   if (state->shm)
     wl_shm_destroy (state->shm);
   if (state->registry)
     wl_registry_destroy (state->registry);
-  if (state->display)
-    wl_display_disconnect (state->display);
 }
 
 static GdkPixbuf *
@@ -338,9 +480,9 @@ screenshot_backend_wayland_get_pixbuf (ScreenshotBackend *backend,
       return NULL;
     }
 
-  if (!state.screencopy_manager)
+  if (!state.image_copy_capture_manager || !state.output_source_manager)
     {
-      g_message ("wlr-screencopy not supported by this Wayland compositor");
+      g_message ("ext-image-copy-capture not supported by this Wayland compositor");
       screenshot_backend_wayland_cleanup (&state);
       return NULL;
     }

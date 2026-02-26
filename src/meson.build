@@ -4,6 +4,7 @@ wayland_protocols_dir = wayland_protocols_dep.get_variable(pkgconfig: 'pkgdatadi
 generated_protocols = [
   'staging/ext-image-copy-capture/ext-image-copy-capture-v1.xml',
   'staging/ext-image-capture-source/ext-image-capture-source-v1.xml',
+  'staging/ext-foreign-toplevel-list/ext-foreign-toplevel-list-v1.xml',
 ]
 
 protocol_sources = []
