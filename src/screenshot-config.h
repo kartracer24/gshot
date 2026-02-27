@@ -21,6 +21,7 @@
 #pragma once
 
 #include <gio/gio.h>
+#include <gdk/gdk.h>
 
 G_BEGIN_DECLS
 
@@ -45,6 +46,7 @@ typedef struct {
 } ScreenshotConfig;
 
 extern ScreenshotConfig *screenshot_config;
+extern GdkMonitor *screenshot_target_monitor;
 
 void        screenshot_load_config                (void);
 void        screenshot_save_config                (void);

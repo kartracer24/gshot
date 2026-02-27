@@ -34,6 +34,7 @@
 #define DEFAULT_FILE_TYPE_KEY   "default-file-type"
 
 ScreenshotConfig *screenshot_config;
+GdkMonitor *screenshot_target_monitor = NULL;
 
 void
 screenshot_load_config (void)

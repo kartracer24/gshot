@@ -53,7 +53,7 @@ screenshot_get_pixbuf (GdkRectangle *rectangle)
 
   if (!force_fallback)
     {
-      /* Try Wayland wlr-screencopy first if on Wayland */
+      /* Try Wayland first if on Wayland */
 #ifdef HAVE_WAYLAND
       if (GDK_IS_WAYLAND_DISPLAY (display))
         {
@@ -61,8 +61,7 @@ screenshot_get_pixbuf (GdkRectangle *rectangle)
           screenshot = screenshot_backend_get_pixbuf (backend, rectangle);
           if (!screenshot)
             {
-              g_message ("wlr-screencopy backend failed, "
-                         "attempting fallback methods...");
+              g_message ("Wayland backend failed, attempting fallback methods...");
             }
           else
             {
@@ -71,7 +70,23 @@ screenshot_get_pixbuf (GdkRectangle *rectangle)
         }
 #endif
 
-      /* Fall back to X11 */
+      /* Fall back to GNOME Shell DBus */
+      if (!screenshot)
+        {
+          g_clear_object (&backend);
+          backend = screenshot_backend_shell_new ();
+          screenshot = screenshot_backend_get_pixbuf (backend, rectangle);
+          if (!screenshot)
+            {
+              g_message ("GNOME Shell DBus backend failed");
+            }
+          else
+            {
+              return screenshot;
+            }
+        }
+
+      /* Final fallback to X11 */
 #ifdef HAVE_X11
       if (!screenshot)
         {
@@ -79,25 +94,9 @@ screenshot_get_pixbuf (GdkRectangle *rectangle)
           backend = screenshot_backend_x11_new ();
           screenshot = screenshot_backend_get_pixbuf (backend, rectangle);
           if (!screenshot)
-            {
-              g_message ("X11 fallback failed, trying GNOME Shell DBus...");
-            }
-          else
-            {
-              return screenshot;
-            }
-        }
-#endif
-
-      /* Final fallback to GNOME Shell DBus */
-      if (!screenshot)
-        {
-          g_clear_object (&backend);
-          backend = screenshot_backend_shell_new ();
-          screenshot = screenshot_backend_get_pixbuf (backend, rectangle);
-          if (!screenshot)
             g_message ("All screenshot backends failed");
         }
+#endif
     }
   else
     {

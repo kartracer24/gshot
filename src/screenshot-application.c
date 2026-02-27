@@ -694,6 +694,18 @@ static void
 capture_clicked_cb (ScreenshotInteractiveDialog *dialog,
                     ScreenshotApplication       *self)
 {
+  /* Store target monitor before hiding the window */
+  GdkDisplay *display = gdk_display_get_default ();
+  GList *windows = gtk_application_get_windows (GTK_APPLICATION (self));
+  if (windows)
+    {
+      GtkWindow *window = GTK_WINDOW (windows->data);
+      if (window && gtk_widget_get_window (GTK_WIDGET (window)))
+        {
+          screenshot_target_monitor = gdk_display_get_monitor_at_window (display, gtk_widget_get_window (GTK_WIDGET (window)));
+        }
+    }
+
   gtk_widget_destroy (GTK_WIDGET (dialog));
   screenshot_start (self);
 }

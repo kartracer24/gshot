@@ -37,6 +37,19 @@ struct _ScreenshotBackendWayland
   GObject parent_instance;
 };
 
+#ifndef DRM_FORMAT_XRGB8888
+#define DRM_FORMAT_XRGB8888 0x34325258
+#endif
+#ifndef DRM_FORMAT_ARGB8888
+#define DRM_FORMAT_ARGB8888 0x34325241
+#endif
+#ifndef DRM_FORMAT_XBGR8888
+#define DRM_FORMAT_XBGR8888 0x34324258
+#endif
+#ifndef DRM_FORMAT_ABGR8888
+#define DRM_FORMAT_ABGR8888 0x34324241
+#endif
+
 typedef struct
 {
   struct wl_display *display;
@@ -45,6 +58,8 @@ typedef struct
   struct ext_image_copy_capture_manager_v1 *image_copy_capture_manager;
   struct ext_output_image_capture_source_manager_v1 *output_source_manager;
   struct wl_output *output;
+  struct wl_output *all_outputs[4];
+  int num_outputs;
   
   struct ext_image_capture_source_v1 *source;
   struct ext_image_copy_capture_session_v1 *session;
@@ -82,9 +97,16 @@ registry_handle_global (void *data,
     }
   else if (g_strcmp0 (interface, "wl_output") == 0)
     {
-      /* Bind to the first output for now */
-      if (state->output == NULL)
-        state->output = wl_registry_bind (registry, name, &wl_output_interface, 1);
+      /* Store all outputs */
+      if (state->num_outputs < 4)
+        {
+          struct wl_output *output = wl_registry_bind (registry, name, &wl_output_interface, version);
+          state->all_outputs[state->num_outputs] = output;
+          state->num_outputs++;
+          /* Default to first output, will be updated later */
+          if (state->num_outputs == 1)
+            state->output = output;
+        }
     }
   else if (g_strcmp0 (interface, ext_image_copy_capture_manager_v1_interface.name) == 0)
     {
@@ -130,8 +152,12 @@ session_handle_shm_format (void *data,
                            uint32_t format)
 {
   WaylandState *state = (WaylandState *)data;
-  /* We prefer ARGB8888 or XRGB8888 for GdkPixbuf */
-  if (state->format == 0 || format == WL_SHM_FORMAT_ARGB8888)
+  
+  /* Prefer ARGB8888 or ABGR8888 */
+  if (state->format == 0 ||
+      format == WL_SHM_FORMAT_ARGB8888 ||
+      format == DRM_FORMAT_ARGB8888 ||
+      format == DRM_FORMAT_ABGR8888)
     state->format = format;
 }
 
@@ -284,20 +310,45 @@ screenshot_backend_wayland_is_available (void)
 }
 
 static void
-swizzle_bgra_to_rgba (uint8_t *data, uint32_t width, uint32_t height, uint32_t stride, gboolean has_alpha)
+convert_to_rgba (uint8_t *data, uint32_t width, uint32_t height, uint32_t stride, uint32_t format)
 {
+  gboolean swap_rb = FALSE;
+  gboolean has_alpha = FALSE;
+
+  /* On Little Endian:
+   * XRGB8888/ARGB8888 are B-G-R-X/B-G-R-A
+   * XBGR8888/ABGR8888 are R-G-B-X/R-G-B-A
+   */
+  if (format == WL_SHM_FORMAT_XRGB8888 ||
+      format == WL_SHM_FORMAT_ARGB8888 ||
+      format == DRM_FORMAT_XRGB8888 ||
+      format == DRM_FORMAT_ARGB8888)
+    {
+      swap_rb = TRUE;
+    }
+
+  if (format == WL_SHM_FORMAT_ARGB8888 ||
+      format == DRM_FORMAT_ARGB8888 ||
+      format == DRM_FORMAT_ABGR8888)
+    {
+      has_alpha = TRUE;
+    }
+
   for (uint32_t y = 0; y < height; y++)
     {
       uint8_t *row = &data[y * stride];
       for (uint32_t x = 0; x < width; x++)
         {
           uint8_t *pixel = &row[x * 4];
-          uint8_t b = pixel[0];
-          uint8_t g = pixel[1];
-          uint8_t r = pixel[2];
-          pixel[0] = r;
-          pixel[1] = g;
-          pixel[2] = b;
+          if (swap_rb)
+            {
+              uint8_t b = pixel[0];
+              uint8_t g = pixel[1];
+              uint8_t r = pixel[2];
+              pixel[0] = r;
+              pixel[1] = g;
+              pixel[2] = b;
+            }
           if (!has_alpha)
             pixel[3] = 0xff;
         }
@@ -312,6 +363,12 @@ screenshot_backend_wayland_capture_screen (WaylandState *state,
   void *shm_data = NULL;
   size_t shm_size = 0;
   uint32_t options = 0;
+
+  if (screenshot_config->take_window_shot && rectangle == NULL)
+    {
+      g_message ("Wayland protocol backend does not support selecting windows yet");
+      return NULL;
+    }
 
   if (!state->image_copy_capture_manager || !state->output_source_manager || !state->output)
     {
@@ -333,7 +390,8 @@ screenshot_backend_wayland_capture_screen (WaylandState *state,
 
   /* 3. Wait for constraints */
   state->constraints_done = FALSE;
-  while (!state->constraints_done)
+  gint64 start_time = g_get_monotonic_time ();
+  while (!state->constraints_done && (g_get_monotonic_time () - start_time) < 2000000)
     {
       if (wl_display_dispatch (state->display) < 0)
         break;
@@ -341,7 +399,7 @@ screenshot_backend_wayland_capture_screen (WaylandState *state,
 
   if (!state->constraints_done)
     {
-      g_message ("Failed to get buffer constraints");
+      g_message ("Failed to get buffer constraints (timeout)");
       return NULL;
     }
 
@@ -364,7 +422,8 @@ screenshot_backend_wayland_capture_screen (WaylandState *state,
 
   /* 7. Wait for ready */
   state->done = FALSE;
-  while (!state->done)
+  start_time = g_get_monotonic_time ();
+  while (!state->done && (g_get_monotonic_time () - start_time) < 5000000)
     {
       if (wl_display_dispatch (state->display) < 0)
         break;
@@ -372,8 +431,7 @@ screenshot_backend_wayland_capture_screen (WaylandState *state,
 
   if (state->done && shm_data)
     {
-      swizzle_bgra_to_rgba (shm_data, state->width, state->height, state->stride,
-                            state->format == WL_SHM_FORMAT_ARGB8888);
+      convert_to_rgba (shm_data, state->width, state->height, state->stride, state->format);
 
       /* Convert raw pixel data to GdkPixbuf */
       state->pixbuf = gdk_pixbuf_new_from_data ((const guchar *)shm_data,
@@ -455,6 +513,30 @@ screenshot_backend_wayland_get_pixbuf (ScreenshotBackend *backend,
       return NULL;
     }
 
+  /* Use the target monitor if set (from interactive mode), otherwise find rightmost */
+  GdkMonitor *target_monitor = screenshot_target_monitor;
+  
+  if (!target_monitor)
+    {
+      /* Find the rightmost monitor as fallback */
+      int n_monitors = gdk_display_get_n_monitors (display);
+      int max_x = -1;
+      for (int i = 0; i < n_monitors; i++)
+        {
+          GdkMonitor *mon = gdk_display_get_monitor (display, i);
+          if (mon)
+            {
+              GdkRectangle geom;
+              gdk_monitor_get_geometry (mon, &geom);
+              if (geom.x > max_x)
+                {
+                  max_x = geom.x;
+                  target_monitor = mon;
+                }
+            }
+        }
+    }
+
   state.registry = wl_display_get_registry (state.display);
   if (!state.registry)
     {
@@ -470,6 +552,22 @@ screenshot_backend_wayland_get_pixbuf (ScreenshotBackend *backend,
       g_message ("Wayland roundtrip failed: %d", ret);
       screenshot_backend_wayland_cleanup (&state);
       return NULL;
+    }
+
+  /* If we have a target monitor, try to use its wl_output directly */
+  if (target_monitor)
+    {
+      struct wl_output *monitor_output = gdk_wayland_monitor_get_wl_output (target_monitor);
+      if (monitor_output)
+        {
+          state.output = monitor_output;
+        }
+    }
+
+  /* Fall back to first output */
+  if (!state.output && state.num_outputs > 0)
+    {
+      state.output = state.all_outputs[0];
     }
 
   if (!state.output || !state.shm)
