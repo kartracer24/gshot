@@ -293,7 +293,7 @@ select_area_done (GObject *source_object,
         }
 
       g_message ("Unable to select area using GNOME Shell's builtin screenshot "
-                 "interface, using GTK selection.");
+                 "interface, resorting to fallback X11.");
 
       screenshot_select_area_x11_async (cb_data);
       return;
