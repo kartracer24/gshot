@@ -218,6 +218,7 @@ static void
 screenshot_select_area_x11_async (CallbackData *cb_data)
 {
   select_area_filter_data data;
+  GdkCursor *cursor;
 
   data.rect.x = 0;
   data.rect.y = 0;
@@ -228,6 +229,10 @@ screenshot_select_area_x11_async (CallbackData *cb_data)
   data.start_x = 0;
   data.start_y = 0;
   data.window = create_select_window();
+
+  cursor = gdk_cursor_new_for_display (gtk_widget_get_display (data.window), GDK_CROSSHAIR);
+  gdk_window_set_cursor (gtk_widget_get_window (data.window), cursor);
+  g_object_unref (cursor);
 
   g_signal_connect (data.window, "draw", G_CALLBACK (select_window_draw), &data);
   g_signal_connect (data.window, "key-press-event", G_CALLBACK (select_area_key_press), &data);
@@ -242,10 +247,6 @@ screenshot_select_area_x11_async (CallbackData *cb_data)
   cb_data->aborted = data.aborted;
   cb_data->rectangle = data.rect;
 
-  /* FIXME: we should actually be emitting the callback When
-   * the compositor has finished re-drawing, but there seems to be no easy
-   * way to know that.
-   */
   g_timeout_add (200, emit_select_callback_in_idle, cb_data);
 }
 
