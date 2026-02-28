@@ -31,6 +31,7 @@
 #include <wayland-protocols/ext-image-copy-capture-v1-enum.h>
 #include "ext-image-copy-capture-v1-client-protocol.h"
 #include "ext-image-capture-source-v1-client-protocol.h"
+#include "ext-foreign-toplevel-list-v1-client-protocol.h"
 
 struct _ScreenshotBackendWayland
 {
@@ -57,10 +58,17 @@ typedef struct
   struct wl_shm *shm;
   struct ext_image_copy_capture_manager_v1 *image_copy_capture_manager;
   struct ext_output_image_capture_source_manager_v1 *output_source_manager;
+  struct ext_foreign_toplevel_list_v1 *toplevel_list;
+  struct ext_foreign_toplevel_image_capture_source_manager_v1 *toplevel_capture_manager;
   struct wl_output *output;
   struct wl_output *all_outputs[4];
   int num_outputs;
   
+  /* Toplevel tracking */
+  struct ext_foreign_toplevel_handle_v1 *selected_toplevel;
+  char **toplevel_titles;
+  int toplevel_count;
+
   struct ext_image_capture_source_v1 *source;
   struct ext_image_copy_capture_session_v1 *session;
   struct ext_image_copy_capture_frame_v1 *frame;
@@ -119,6 +127,18 @@ registry_handle_global (void *data,
       state->output_source_manager = wl_registry_bind (registry, name,
                                                        &ext_output_image_capture_source_manager_v1_interface,
                                                        1);
+    }
+  else if (g_strcmp0 (interface, ext_foreign_toplevel_list_v1_interface.name) == 0)
+    {
+      state->toplevel_list = wl_registry_bind (registry, name,
+                                                &ext_foreign_toplevel_list_v1_interface,
+                                                1);
+    }
+  else if (g_strcmp0 (interface, ext_foreign_toplevel_image_capture_source_manager_v1_interface.name) == 0)
+    {
+      state->toplevel_capture_manager = wl_registry_bind (registry, name,
+                                                          &ext_foreign_toplevel_image_capture_source_manager_v1_interface,
+                                                          1);
     }
 }
 
@@ -260,6 +280,30 @@ static const struct ext_image_copy_capture_frame_v1_listener frame_listener = {
   frame_handle_failed,
 };
 
+/* Toplevel list listener for window capture */
+static void
+toplevel_handle_toplevel (void *data,
+                           struct ext_foreign_toplevel_list_v1 *list,
+                           struct ext_foreign_toplevel_handle_v1 *toplevel)
+{
+  WaylandState *state = (WaylandState *)data;
+  /* TODO: Store toplevel handle for later capture */
+  g_message ("Found toplevel window");
+}
+
+static void
+toplevel_handle_finished (void *data,
+                          struct ext_foreign_toplevel_list_v1 *list)
+{
+  WaylandState *state = (WaylandState *)data;
+  g_message ("Toplevel list finished");
+}
+
+static const struct ext_foreign_toplevel_list_v1_listener toplevel_list_listener = {
+  toplevel_handle_toplevel,
+  toplevel_handle_finished,
+};
+
 static struct wl_buffer *
 create_shm_buffer (WaylandState *state, void **out_data, size_t *out_size)
 {
@@ -363,11 +407,41 @@ screenshot_backend_wayland_capture_screen (WaylandState *state,
   void *shm_data = NULL;
   size_t shm_size = 0;
   uint32_t options = 0;
+  GdkRectangle capture_rect;
+  GdkRectangle *use_rect = NULL;
 
   if (screenshot_config->take_window_shot && rectangle == NULL)
     {
       g_message ("Wayland protocol backend does not support selecting windows yet");
       return NULL;
+    }
+
+  if (screenshot_config->take_area_shot && rectangle != NULL)
+    {
+      /* Get monitor geometry and adjust rectangle */
+      GdkDisplay *display = gdk_display_get_default ();
+      GdkMonitor *monitor = screenshot_target_monitor;
+      if (!monitor)
+        monitor = gdk_display_get_primary_monitor (display);
+      
+      if (monitor)
+        {
+          GdkRectangle monitor_geom;
+          gdk_monitor_get_geometry (monitor, &monitor_geom);
+          g_message ("Area capture: monitor at %d,%d, original rect: %d,%d %dx%d",
+                     monitor_geom.x, monitor_geom.y,
+                     rectangle->x, rectangle->y, rectangle->width, rectangle->height);
+          
+          /* Adjust rectangle to be relative to the monitor */
+          capture_rect = *rectangle;
+          capture_rect.x = rectangle->x - monitor_geom.x;
+          capture_rect.y = rectangle->y - monitor_geom.y;
+          
+          g_message ("Area capture: adjusted rect: %d,%d %dx%d",
+                     capture_rect.x, capture_rect.y, capture_rect.width, capture_rect.height);
+          
+          use_rect = &capture_rect;
+        }
     }
 
   if (!state->image_copy_capture_manager || !state->output_source_manager || !state->output)
@@ -452,10 +526,10 @@ screenshot_backend_wayland_capture_screen (WaylandState *state,
           state->pixbuf = copy;
         }
 
-      if (state->pixbuf && rectangle)
+      if (state->pixbuf && use_rect)
         {
-          GdkPixbuf *cropped = gdk_pixbuf_new (GDK_COLORSPACE_RGB, TRUE, 8, rectangle->width, rectangle->height);
-          gdk_pixbuf_copy_area (state->pixbuf, rectangle->x, rectangle->y, rectangle->width, rectangle->height, cropped, 0, 0);
+          GdkPixbuf *cropped = gdk_pixbuf_new (GDK_COLORSPACE_RGB, TRUE, 8, use_rect->width, use_rect->height);
+          gdk_pixbuf_copy_area (state->pixbuf, use_rect->x, use_rect->y, use_rect->width, use_rect->height, cropped, 0, 0);
           g_object_unref (state->pixbuf);
           state->pixbuf = cropped;
         }
@@ -482,6 +556,10 @@ screenshot_backend_wayland_cleanup (WaylandState *state)
     ext_image_copy_capture_manager_v1_destroy (state->image_copy_capture_manager);
   if (state->output_source_manager)
     ext_output_image_capture_source_manager_v1_destroy (state->output_source_manager);
+  if (state->toplevel_list)
+    ext_foreign_toplevel_list_v1_destroy (state->toplevel_list);
+  if (state->toplevel_capture_manager)
+    ext_foreign_toplevel_image_capture_source_manager_v1_destroy (state->toplevel_capture_manager);
   if (state->output)
     wl_output_destroy (state->output);
   if (state->shm)
@@ -554,13 +632,50 @@ screenshot_backend_wayland_get_pixbuf (ScreenshotBackend *backend,
       return NULL;
     }
 
-  /* If we have a target monitor, try to use its wl_output directly */
+  /* If we have a target monitor, use it for capture */
   if (target_monitor)
     {
+      GdkRectangle geom;
+      gdk_monitor_get_geometry (target_monitor, &geom);
+      g_message ("Using target monitor at %d,%d for capture", geom.x, geom.y);
+      
+      /* Get the wl_output from the target monitor */
       struct wl_output *monitor_output = gdk_wayland_monitor_get_wl_output (target_monitor);
+      g_message ("Target monitor wl_output: %p", (void*)monitor_output);
+      g_message ("Available outputs:");
+      for (int i = 0; i < state.num_outputs; i++)
+        {
+          g_message ("  output[%d]: %p", i, (void*)state.all_outputs[i]);
+        }
+      
       if (monitor_output)
         {
           state.output = monitor_output;
+        }
+      else
+        {
+          /* Fallback: try to match by comparing all GdkMonitors to find the one matching target_monitor */
+          g_message ("wl_output from GDK is NULL, trying to match GdkMonitor to wl_output");
+          int n_monitors = gdk_display_get_n_monitors (display);
+          for (int i = 0; i < n_monitors; i++)
+            {
+              GdkMonitor *mon = gdk_display_get_monitor (display, i);
+              if (mon)
+                {
+                  GdkRectangle mon_geom;
+                  gdk_monitor_get_geometry (mon, &mon_geom);
+                  if (mon_geom.x == geom.x && mon_geom.y == geom.y)
+                    {
+                      struct wl_output *mon_output = gdk_wayland_monitor_get_wl_output (mon);
+                      g_message ("Found matching monitor at %d,%d, wl_output: %p", mon_geom.x, mon_geom.y, (void*)mon_output);
+                      if (mon_output && state.num_outputs > i)
+                        {
+                          state.output = state.all_outputs[i];
+                          break;
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -583,6 +698,24 @@ screenshot_backend_wayland_get_pixbuf (ScreenshotBackend *backend,
       g_message ("ext-image-copy-capture not supported by this Wayland compositor");
       screenshot_backend_wayland_cleanup (&state);
       return NULL;
+    }
+
+  /* Handle window capture */
+  if (screenshot_config && screenshot_config->take_window_shot)
+    {
+      if (state.toplevel_list && state.toplevel_capture_manager)
+        {
+          /* Start listening for toplevels */
+          ext_foreign_toplevel_list_v1_add_listener (state.toplevel_list, &toplevel_list_listener, &state);
+          
+          /* Dispatch to get toplevel list */
+          wl_display_roundtrip (state.display);
+        }
+      else
+        {
+          g_message ("Window capture requires ext_foreign_toplevel_image_capture_source_manager_v1");
+          return NULL;
+        }
     }
 
   pixbuf = screenshot_backend_wayland_capture_screen (&state, rectangle);

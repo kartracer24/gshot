@@ -86,15 +86,19 @@ screenshot_get_pixbuf (GdkRectangle *rectangle)
             }
         }
 
-      /* Final fallback to X11 */
+      /* Final fallback to X11 - only if not already on Wayland */
 #ifdef HAVE_X11
-      if (!screenshot)
+      if (!screenshot && !GDK_IS_WAYLAND_DISPLAY (display))
         {
           g_clear_object (&backend);
           backend = screenshot_backend_x11_new ();
           screenshot = screenshot_backend_get_pixbuf (backend, rectangle);
           if (!screenshot)
             g_message ("All screenshot backends failed");
+        }
+      else if (!screenshot)
+        {
+          g_message ("All screenshot backends failed (X11 not available on Wayland)");
         }
 #endif
     }
@@ -103,11 +107,15 @@ screenshot_get_pixbuf (GdkRectangle *rectangle)
       g_message ("Using fallback methods as requested");
 
 #ifdef HAVE_X11
-      if (!screenshot)
+      if (!screenshot && !GDK_IS_WAYLAND_DISPLAY (display))
         {
           g_clear_object (&backend);
           backend = screenshot_backend_x11_new ();
           screenshot = screenshot_backend_get_pixbuf (backend, rectangle);
+        }
+      else if (!screenshot)
+        {
+          g_message ("Cannot use X11 fallback on Wayland");
         }
 #endif
     }
