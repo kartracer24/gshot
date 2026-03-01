@@ -4,3 +4,6 @@
 
 - You do not add emojis in generated code/documentation
 - Only create new documentation files when requested
+- You do not just make assumptions, you verify
+- The user can make mistakes or speculate, do not assume they are always right
+
