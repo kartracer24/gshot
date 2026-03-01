@@ -31,30 +31,18 @@ gnome_screenshot_servicesdir = join_paths(gnome_screenshot_datadir, 'dbus-1', 's
 gnome_screenshot_schemadir = join_paths(gnome_screenshot_datadir, 'glib-2.0', 'schemas')
 
 glib_req_version = '>= 2.35.1'
-gtk_req_version = '>= 3.12.0'
-libhandy_req_version = '>= 1.5.0'
+gtk_req_version = '>= 4.10.0'
 
 mathlib_dep = cc.find_library('m', required: false)
-x11_dep = dependency('x11', required: get_option ('x11'))
-xext_dep = dependency('xext', required: get_option ('x11'))
 wayland_client_dep = dependency('wayland-client', required: false)
 wayland_protocols_dep = dependency('wayland-protocols', required: false)
 glib_dep = dependency('glib-2.0', version: glib_req_version)
-gtk_dep = dependency('gtk+-3.0', version: gtk_req_version)
-libhandy_dep = dependency('libhandy-1', version: libhandy_req_version)
+gtk_dep = dependency('gtk4', version: gtk_req_version)
+gtk_wayland_dep = dependency('gtk4-wayland', version: gtk_req_version)
 
 config_h = configuration_data()
 config_h.set_quoted('VERSION', meson.project_version())
 config_h.set_quoted('GETTEXT_PACKAGE', meson.project_name())
-
-has_x11 = x11_dep.found() and xext_dep.found()
-if has_x11
-  config_h.set('HAVE_X11', 1)
-
-  if cc.has_header('X11/extensions/shape.h')
-    config_h.set('HAVE_X11_EXTENSIONS_SHAPE_H', 1)
-  endif
-endif
 
 has_wayland = wayland_client_dep.found() and wayland_protocols_dep.found()
 if has_wayland

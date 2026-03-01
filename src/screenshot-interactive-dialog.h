@@ -22,13 +22,13 @@
 
 #pragma once
 
-#include <handy.h>
+#include <gtk/gtk.h>
 
 G_BEGIN_DECLS
 
 #define SCREENSHOT_TYPE_INTERACTIVE_DIALOG (screenshot_interactive_dialog_get_type())
 
-G_DECLARE_FINAL_TYPE (ScreenshotInteractiveDialog, screenshot_interactive_dialog, SCREENSHOT, INTERACTIVE_DIALOG, HdyApplicationWindow)
+G_DECLARE_FINAL_TYPE (ScreenshotInteractiveDialog, screenshot_interactive_dialog, SCREENSHOT, INTERACTIVE_DIALOG, GtkApplicationWindow)
 
 ScreenshotInteractiveDialog *screenshot_interactive_dialog_new (GtkApplication *app);
 

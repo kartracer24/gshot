@@ -30,7 +30,7 @@
 
 #ifdef HAVE_WAYLAND
 #include "screenshot-backend-wayland.h"
-#include <gdk/gdkwayland.h>
+#include <gdk/wayland/gdkwayland.h>
 #endif
 
 #ifdef HAVE_X11
@@ -134,7 +134,7 @@ response_cb (GtkDialog  *dialog,
              gint        response_id,
              DialogData *data)
 {
-  gtk_widget_destroy (GTK_WIDGET (dialog));
+  gtk_window_destroy (GTK_WINDOW (dialog));
 
   if (data->callback)
     data->callback (response_id, data->user_data);
@@ -190,10 +190,9 @@ screenshot_display_help (GtkWindow *parent)
 {
   g_autoptr(GError) error = NULL;
 
-  gtk_show_uri_on_window (parent,
-                          "help:gnome-help/screen-shot-record",
-                          gtk_get_current_event_time (),
-                          &error);
+  gtk_show_uri (parent,
+                "help:gnome-help/screen-shot-record",
+                GDK_CURRENT_TIME);
 
   if (error)
     screenshot_show_dialog (parent,

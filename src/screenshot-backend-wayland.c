@@ -25,7 +25,7 @@
 #include "screenshot-config.h"
 
 #include <wayland-client.h>
-#include <gdk/gdkwayland.h>
+#include <gdk/wayland/gdkwayland.h>
 #include <sys/mman.h>
 #include <unistd.h>
 #include <wayland-protocols/ext-image-copy-capture-v1-enum.h>
@@ -422,7 +422,11 @@ screenshot_backend_wayland_capture_screen (WaylandState *state,
       GdkDisplay *display = gdk_display_get_default ();
       GdkMonitor *monitor = screenshot_target_monitor;
       if (!monitor)
-        monitor = gdk_display_get_primary_monitor (display);
+        {
+          GListModel *monitors = gdk_display_get_monitors (display);
+          if (monitors && g_list_model_get_n_items (monitors) > 0)
+            monitor = GDK_MONITOR (g_list_model_get_item (monitors, 0));
+        }
       
       if (monitor)
         {
@@ -597,11 +601,12 @@ screenshot_backend_wayland_get_pixbuf (ScreenshotBackend *backend,
   if (!target_monitor)
     {
       /* Find the rightmost monitor as fallback */
-      int n_monitors = gdk_display_get_n_monitors (display);
+      GListModel *monitors = gdk_display_get_monitors (display);
+      guint n_monitors = monitors ? g_list_model_get_n_items (monitors) : 0;
       int max_x = -1;
-      for (int i = 0; i < n_monitors; i++)
+      for (guint i = 0; i < n_monitors; i++)
         {
-          GdkMonitor *mon = gdk_display_get_monitor (display, i);
+          GdkMonitor *mon = GDK_MONITOR (g_list_model_get_item (monitors, i));
           if (mon)
             {
               GdkRectangle geom;
@@ -656,10 +661,11 @@ screenshot_backend_wayland_get_pixbuf (ScreenshotBackend *backend,
         {
           /* Fallback: try to match by comparing all GdkMonitors to find the one matching target_monitor */
           g_message ("wl_output from GDK is NULL, trying to match GdkMonitor to wl_output");
-          int n_monitors = gdk_display_get_n_monitors (display);
-          for (int i = 0; i < n_monitors; i++)
+          GListModel *monitors = gdk_display_get_monitors (display);
+          guint n_monitors = monitors ? g_list_model_get_n_items (monitors) : 0;
+          for (guint i = 0; i < n_monitors; i++)
             {
-              GdkMonitor *mon = gdk_display_get_monitor (display, i);
+              GdkMonitor *mon = GDK_MONITOR (g_list_model_get_item (monitors, i));
               if (mon)
                 {
                   GdkRectangle mon_geom;

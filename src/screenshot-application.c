@@ -31,8 +31,6 @@
 #include <glib/gi18n.h>
 #include <gio/gio.h>
 
-#include <handy.h>
-
 #include "screenshot-application.h"
 #include "screenshot-area-selection.h"
 #include "screenshot-config.h"
@@ -40,6 +38,9 @@
 #include "screenshot-interactive-dialog.h"
 #include "screenshot-utils.h"
 #include "screenshot-dialog.h"
+
+#define CONFIG_GROUP "Settings"
+#define LAST_SAVE_DIRECTORY_KEY "last-save-directory"
 
 #define LAST_SAVE_DIRECTORY_KEY "last-save-directory"
 
@@ -67,7 +68,7 @@ static void
 save_folder_to_settings (ScreenshotApplication *self)
 {
   g_autofree gchar *folder = screenshot_dialog_get_folder (self->dialog);
-  g_settings_set_string (screenshot_config->settings,
+  g_key_file_set_string (screenshot_config->keyfile, CONFIG_GROUP,
                          LAST_SAVE_DIRECTORY_KEY, folder);
 }
 
@@ -109,7 +110,7 @@ screenshot_close_interactive_dialog (ScreenshotApplication *self)
 {
   ScreenshotDialog *dialog = self->dialog;
   save_folder_to_settings (self);
-  gtk_widget_destroy (GTK_WIDGET (dialog));
+  gtk_window_destroy (GTK_WINDOW (dialog));
 }
 
 static void
@@ -380,11 +381,12 @@ screenshot_back (ScreenshotApplication *self)
 static void
 screenshot_save_to_clipboard (ScreenshotApplication *self)
 {
-  GtkClipboard *clipboard;
+  GdkClipboard *clipboard;
+  GdkTexture *texture;
 
-  clipboard = gtk_clipboard_get_for_display (gdk_display_get_default (),
-                                             GDK_SELECTION_CLIPBOARD);
-  gtk_clipboard_set_image (clipboard, self->screenshot);
+  clipboard = gtk_widget_get_clipboard (GTK_WIDGET (self));
+  texture = gdk_texture_new_for_pixbuf (self->screenshot);
+  gdk_clipboard_set_texture (clipboard, texture);
 }
 
 static void
@@ -700,13 +702,21 @@ capture_clicked_cb (ScreenshotInteractiveDialog *dialog,
   if (windows)
     {
       GtkWindow *window = GTK_WINDOW (windows->data);
-      if (window && gtk_widget_get_window (GTK_WIDGET (window)))
+      if (window)
         {
-          screenshot_target_monitor = gdk_display_get_monitor_at_window (display, gtk_widget_get_window (GTK_WIDGET (window)));
+          GtkNative *native = gtk_widget_get_native (GTK_WIDGET (window));
+          if (native)
+            {
+              GdkSurface *surface = gtk_native_get_surface (native);
+              if (surface)
+                {
+                  screenshot_target_monitor = gdk_display_get_monitor_at_surface (display, surface);
+                }
+            }
         }
     }
 
-  gtk_widget_destroy (GTK_WIDGET (dialog));
+  gtk_window_destroy (GTK_WINDOW (dialog));
   screenshot_start (self);
 }
 
@@ -728,7 +738,7 @@ action_quit (GSimpleAction *action,
              gpointer user_data)
 {
   GList *windows = gtk_application_get_windows (GTK_APPLICATION (user_data));
-  gtk_widget_destroy (g_list_nth_data (windows, 0));
+  gtk_window_destroy (GTK_WINDOW (g_list_nth_data (windows, 0)));
 }
 
 static void
@@ -822,6 +832,49 @@ static GActionEntry action_entries[] = {
 };
 
 static void
+setup_color_scheme (gboolean dark_mode)
+{
+  GtkCssProvider *provider;
+  GdkDisplay *display;
+  GtkSettings *settings;
+  const gchar *gtk_theme;
+
+  display = gdk_display_get_default ();
+  if (display == NULL)
+    return;
+
+  settings = gtk_settings_get_default ();
+  if (settings)
+    {
+      gtk_theme = g_getenv ("GTK_THEME");
+      if (gtk_theme)
+        {
+          g_object_set (settings, "gtk-theme-name", gtk_theme, NULL);
+        }
+      else if (dark_mode)
+        {
+          g_object_set (settings, "gtk-theme-name", "Adwaita-dark", NULL);
+        }
+      else
+        {
+          g_object_set (settings, "gtk-theme-name", "Adwaita", NULL);
+        }
+    }
+
+  provider = gtk_css_provider_new ();
+  gtk_css_provider_load_from_string (provider, "");
+
+  if (dark_mode)
+    g_object_set (provider, "prefers-color-scheme", GTK_INTERFACE_COLOR_SCHEME_DARK, NULL);
+
+  gtk_style_context_add_provider_for_display (display,
+                                             GTK_STYLE_PROVIDER (provider),
+                                             GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+
+  g_object_unref (provider);
+}
+
+static void
 screenshot_application_startup (GApplication *app)
 {
   const gchar *help_accels[2] = { "F1", NULL };
@@ -830,11 +883,9 @@ screenshot_application_startup (GApplication *app)
 
   G_APPLICATION_CLASS (screenshot_application_parent_class)->startup (app);
 
-  hdy_init ();
-  hdy_style_manager_set_color_scheme (hdy_style_manager_get_default (),
-                                      HDY_COLOR_SCHEME_PREFER_LIGHT);
-
   screenshot_load_config ();
+
+  setup_color_scheme (screenshot_config->dark_mode);
 
   g_set_application_name (_("Screenshot"));
   g_set_prgname ("org.gnome.Screenshot");

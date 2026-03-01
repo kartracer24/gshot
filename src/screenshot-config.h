@@ -26,7 +26,7 @@
 G_BEGIN_DECLS
 
 typedef struct {
-  GSettings *settings;
+  GKeyFile *keyfile;
 
   gchar *save_dir;
   gchar *file_type;
@@ -39,6 +39,7 @@ typedef struct {
 
   gboolean include_pointer;
   gboolean include_icc_profile;
+  gboolean dark_mode;
 
   guint delay;
 

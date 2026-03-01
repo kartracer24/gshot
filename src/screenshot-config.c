@@ -1,4 +1,4 @@
-/* screenshot-config.h - Holds current configuration for gnome-screenshot
+/* screenshot-config.c - Holds current configuration for gnome-screenshot
  *
  * Copyright (C) 2001 Jonathan Blandford <jrb@alum.mit.edu>
  * Copyright (C) 2006 Emmanuele Bassi <ebassi@gnome.org>
@@ -15,74 +15,134 @@
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
+ * along with this program; if not, write to the
+ * Free Software Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
  * USA
  */
 
 #include "config.h"
 
 #include <glib/gi18n.h>
+#include <glib/gkeyfile.h>
 
 #include "screenshot-config.h"
 
+#define CONFIG_GROUP            "Settings"
 #define DELAY_KEY               "delay"
 #define INCLUDE_POINTER_KEY     "include-pointer"
 #define INCLUDE_ICC_PROFILE     "include-icc-profile"
+#define DARK_MODE_KEY          "dark-mode"
 #define AUTO_SAVE_DIRECTORY_KEY "auto-save-directory"
 #define LAST_SAVE_DIRECTORY_KEY "last-save-directory"
 #define DEFAULT_FILE_TYPE_KEY   "default-file-type"
 
+#define CONFIG_DIR_NAME        "gshot"
+#define CONFIG_FILE_NAME       "config"
+
 ScreenshotConfig *screenshot_config;
 GdkMonitor *screenshot_target_monitor = NULL;
+
+static gchar *
+get_config_path (void)
+{
+  const gchar *config_home;
+  gchar *config_dir;
+  gchar *config_file;
+
+  config_home = g_get_user_config_dir ();
+  config_dir = g_build_filename (config_home, CONFIG_DIR_NAME, NULL);
+  config_file = g_build_filename (config_dir, CONFIG_FILE_NAME, NULL);
+
+  g_mkdir_with_parents (config_dir, 0755);
+
+  return config_file;
+}
 
 void
 screenshot_load_config (void)
 {
   ScreenshotConfig *config;
+  GKeyFile *keyfile;
+  gchar *config_path;
+  GError *error = NULL;
 
   config = g_slice_new0 (ScreenshotConfig);
 
-  config->settings = g_settings_new ("org.gnome.gnome-screenshot");
-  config->save_dir =
-    g_settings_get_string (config->settings,
-                           LAST_SAVE_DIRECTORY_KEY);
-  config->delay =
-    g_settings_get_int (config->settings,
-                        DELAY_KEY);
-  config->include_pointer =
-    g_settings_get_boolean (config->settings,
-                            INCLUDE_POINTER_KEY);
-  config->file_type =
-    g_settings_get_string (config->settings,
-                           DEFAULT_FILE_TYPE_KEY);
-  config->include_icc_profile =
-    g_settings_get_boolean (config->settings,
-                            INCLUDE_ICC_PROFILE);
+  keyfile = g_key_file_new ();
+  config_path = get_config_path ();
+
+  if (g_key_file_load_from_file (keyfile, config_path, G_KEY_FILE_NONE, &error))
+    {
+      config->save_dir = g_key_file_get_string (keyfile, CONFIG_GROUP, LAST_SAVE_DIRECTORY_KEY, NULL);
+      if (config->save_dir == NULL || *config->save_dir == '\0')
+        {
+          g_free (config->save_dir);
+          config->save_dir = g_build_filename (g_get_user_special_dir (G_USER_DIRECTORY_PICTURES), NULL);
+        }
+
+      config->delay = g_key_file_get_integer (keyfile, CONFIG_GROUP, DELAY_KEY, NULL);
+      config->include_pointer = g_key_file_get_boolean (keyfile, CONFIG_GROUP, INCLUDE_POINTER_KEY, NULL);
+      config->include_icc_profile = g_key_file_get_boolean (keyfile, CONFIG_GROUP, INCLUDE_ICC_PROFILE, NULL);
+      if (!g_key_file_has_key (keyfile, CONFIG_GROUP, DARK_MODE_KEY, NULL))
+        config->dark_mode = TRUE;
+      else
+        config->dark_mode = g_key_file_get_boolean (keyfile, CONFIG_GROUP, DARK_MODE_KEY, NULL);
+
+      config->file_type = g_key_file_get_string (keyfile, CONFIG_GROUP, DEFAULT_FILE_TYPE_KEY, NULL);
+      if (config->file_type == NULL)
+        config->file_type = g_strdup ("png");
+    }
+  else
+    {
+      config->save_dir = g_build_filename (g_get_user_special_dir (G_USER_DIRECTORY_PICTURES), NULL);
+      config->delay = 0;
+      config->include_pointer = FALSE;
+      config->include_icc_profile = TRUE;
+      config->dark_mode = TRUE;
+      config->file_type = g_strdup ("png");
+    }
+
+  g_key_file_set_string (keyfile, CONFIG_GROUP, LAST_SAVE_DIRECTORY_KEY, config->save_dir);
+  g_key_file_set_integer (keyfile, CONFIG_GROUP, DELAY_KEY, config->delay);
+  g_key_file_set_boolean (keyfile, CONFIG_GROUP, INCLUDE_POINTER_KEY, config->include_pointer);
+  g_key_file_set_boolean (keyfile, CONFIG_GROUP, INCLUDE_ICC_PROFILE, config->include_icc_profile);
+  g_key_file_set_boolean (keyfile, CONFIG_GROUP, DARK_MODE_KEY, config->dark_mode);
+  g_key_file_set_string (keyfile, CONFIG_GROUP, DEFAULT_FILE_TYPE_KEY, config->file_type);
+
+  config->keyfile = keyfile;
+  g_free (config_path);
 
   config->take_window_shot = FALSE;
   config->take_area_shot = FALSE;
 
   screenshot_config = config;
+
+  config_path = get_config_path ();
+  g_key_file_save_to_file (keyfile, config_path, NULL);
+  g_free (config_path);
 }
 
 void
 screenshot_save_config (void)
 {
   ScreenshotConfig *c = screenshot_config;
+  gchar *config_path;
+  GError *error = NULL;
 
   g_assert (c != NULL);
 
-  /* if we were not started up in interactive mode, avoid
-   * overwriting these settings.
-   */
-  if (!c->interactive)
-    return;
+  g_key_file_set_boolean (c->keyfile, CONFIG_GROUP, INCLUDE_POINTER_KEY, c->include_pointer);
+  g_key_file_set_boolean (c->keyfile, CONFIG_GROUP, DARK_MODE_KEY, c->dark_mode);
+  g_key_file_set_integer (c->keyfile, CONFIG_GROUP, DELAY_KEY, c->delay);
 
-  g_settings_set_boolean (c->settings,
-                          INCLUDE_POINTER_KEY, c->include_pointer);
-
-  g_settings_set_int (c->settings, DELAY_KEY, c->delay);
+  config_path = get_config_path ();
+  g_key_file_save_to_file (c->keyfile, config_path, &error);
+  if (error)
+    {
+      g_warning ("Failed to save config: %s", error->message);
+      g_error_free (error);
+    }
+  g_free (config_path);
 }
 
 gboolean
@@ -131,9 +191,15 @@ screenshot_config_parse_command_line (gboolean clipboard_arg,
   else
     {
       g_free (screenshot_config->save_dir);
-      screenshot_config->save_dir =
-        g_settings_get_string (screenshot_config->settings,
-                               AUTO_SAVE_DIRECTORY_KEY);
+      screenshot_config->save_dir = g_key_file_get_string (screenshot_config->keyfile,
+                                                           CONFIG_GROUP,
+                                                           AUTO_SAVE_DIRECTORY_KEY,
+                                                           NULL);
+      if (screenshot_config->save_dir == NULL || *screenshot_config->save_dir == '\0')
+        {
+          g_free (screenshot_config->save_dir);
+          screenshot_config->save_dir = g_build_filename (g_get_user_special_dir (G_USER_DIRECTORY_PICTURES), NULL);
+        }
 
       screenshot_config->delay = delay_arg;
       screenshot_config->include_pointer = include_pointer_arg;

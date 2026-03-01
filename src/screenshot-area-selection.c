@@ -21,6 +21,7 @@
 #include "config.h"
 
 #include <gtk/gtk.h>
+#include <gtk/gtkgestureclick.h>
 
 #include "screenshot-area-selection.h"
 #include "screenshot-config.h"
@@ -29,102 +30,21 @@ typedef struct {
   GdkRectangle  rect;
   gboolean      button_pressed;
   GtkWidget    *window;
+  GtkDrawingArea *drawing_area;
 
   gboolean      aborted;
   gint          start_x;
   gint          start_y;
-} select_area_filter_data;
+} select_area_data;
 
-static gboolean
-select_area_button_press (GtkWidget               *window,
-                          GdkEventButton          *event,
-                          select_area_filter_data *data)
+static void
+select_area_draw (GtkDrawingArea *drawing_area,
+                  cairo_t        *cr,
+                  int             width,
+                  int             height,
+                  gpointer        user_data)
 {
-  if (data->button_pressed)
-    return TRUE;
-
-  data->button_pressed = TRUE;
-  data->start_x = (gint)event->x;
-  data->start_y = (gint)event->y;
-  data->rect.x = data->start_x;
-  data->rect.y = data->start_y;
-  data->rect.width = 0;
-  data->rect.height = 0;
-
-  GdkDisplay *display = gtk_widget_get_display (window);
-  GdkMonitor *monitor = gdk_display_get_monitor_at_point (display, (gint)event->x_root, (gint)event->y_root);
-  screenshot_target_monitor = monitor;
-
-  gtk_widget_queue_draw (window);
-
-  return TRUE;
-}
-
-static gboolean
-select_area_button_release (GtkWidget               *window,
-                             GdkEventButton          *event,
-                             select_area_filter_data *data)
-{
-  if (!data->button_pressed)
-    return TRUE;
-
-  data->rect.width = ABS ((gint)event->x - data->start_x);
-  data->rect.height = ABS ((gint)event->y - data->start_y);
-  data->rect.x = MIN ((gint)event->x, data->start_x);
-  data->rect.y = MIN ((gint)event->y, data->start_y);
-
-  gtk_main_quit ();
-
-  return TRUE;
-}
-
-static gboolean
-select_area_motion_notify (GtkWidget               *window,
-                           GdkEventMotion          *event,
-                           select_area_filter_data *data)
-{
-  if (!data->button_pressed)
-    return TRUE;
-
-  data->rect.width = ABS ((gint)event->x - data->start_x);
-  data->rect.height = ABS ((gint)event->y - data->start_y);
-  data->rect.x = MIN ((gint)event->x, data->start_x);
-  data->rect.y = MIN ((gint)event->y, data->start_y);
-
-  gtk_widget_queue_draw (window);
-
-  return TRUE;
-}
-
-static gboolean
-select_area_key_press (GtkWidget               *window,
-                       GdkEventKey             *event,
-                       select_area_filter_data *data)
-{
-  if (event->keyval == GDK_KEY_Escape)
-    {
-      data->rect.x = 0;
-      data->rect.y = 0;
-      data->rect.width  = 0;
-      data->rect.height = 0;
-      data->aborted = TRUE;
-
-      gtk_main_quit ();
-    }
-
-  return TRUE;
-}
-
-static gboolean
-select_window_draw (GtkWidget *window, cairo_t *cr, gpointer user_data)
-{
-  select_area_filter_data *data = user_data;
-  GtkStyleContext *style;
-
-  if (!data)
-    return TRUE;
-
-  style = gtk_widget_get_style_context (window);
+  select_area_data *data = user_data;
 
   cairo_set_operator (cr, CAIRO_OPERATOR_SOURCE);
   cairo_set_source_rgba (cr, 0, 0, 0, 0.3);
@@ -143,51 +63,144 @@ select_window_draw (GtkWidget *window, cairo_t *cr, gpointer user_data)
       cairo_rectangle (cr, data->rect.x, data->rect.y, data->rect.width, data->rect.height);
       cairo_stroke (cr);
     }
+}
+
+static gboolean
+select_area_button_press (GtkEventController *controller,
+                         gint                n_press,
+                         double              x,
+                         double              y,
+                         select_area_data   *data)
+{
+  if (data->button_pressed)
+    return TRUE;
+
+  data->button_pressed = TRUE;
+  data->start_x = (gint)x;
+  data->start_y = (gint)y;
+  data->rect.x = data->start_x;
+  data->rect.y = data->start_y;
+  data->rect.width = 0;
+  data->rect.height = 0;
+
+  GtkWidget *widget = gtk_event_controller_get_widget (controller);
+  GdkSurface *surface = gtk_native_get_surface (gtk_widget_get_native (widget));
+  GdkDisplay *display = gtk_widget_get_display (widget);
+  GdkMonitor *monitor = gdk_display_get_monitor_at_surface (display, surface);
+  screenshot_target_monitor = monitor;
+
+  gtk_widget_queue_draw (widget);
+
+  return TRUE;
+}
+
+static gboolean
+select_area_button_release (GtkEventController *controller,
+                            double              x,
+                            double              y,
+                            select_area_data   *data)
+{
+  if (!data->button_pressed)
+    return TRUE;
+
+  data->rect.width = ABS ((gint)x - data->start_x);
+  data->rect.height = ABS ((gint)y - data->start_y);
+  data->rect.x = MIN ((gint)x, data->start_x);
+  data->rect.y = MIN ((gint)y, data->start_y);
+
+  gtk_window_destroy (GTK_WINDOW (data->window));
+
+  return TRUE;
+}
+
+static gboolean
+select_area_motion (GtkEventController *controller,
+                    double              x,
+                    double              y,
+                    select_area_data   *data)
+{
+  if (!data->button_pressed)
+    return TRUE;
+
+  data->rect.width = ABS ((gint)x - data->start_x);
+  data->rect.height = ABS ((gint)y - data->start_y);
+  data->rect.x = MIN ((gint)x, data->start_x);
+  data->rect.y = MIN ((gint)y, data->start_y);
+
+  GtkWidget *widget = gtk_event_controller_get_widget (controller);
+  gtk_widget_queue_draw (widget);
+
+  return TRUE;
+}
+
+static gboolean
+select_area_key_press (GtkEventController *controller,
+                       guint               keyval,
+                       guint               keycode,
+                       GdkModifierType     state,
+                       select_area_data   *data)
+{
+  if (keyval == GDK_KEY_Escape)
+    {
+      data->rect.x = 0;
+      data->rect.y = 0;
+      data->rect.width  = 0;
+      data->rect.height = 0;
+      data->aborted = TRUE;
+
+      gtk_window_destroy (GTK_WINDOW (data->window));
+    }
 
   return TRUE;
 }
 
 static GtkWidget *
-create_select_window (void)
+create_select_window (int *width, int *height)
 {
   GtkWidget *window;
-  GdkScreen *screen;
-  GdkVisual *visual;
   GdkDisplay *display;
   GdkMonitor *monitor;
   GdkRectangle geom;
+  GListModel *monitors;
+  guint monitor_count = 0;
 
-  screen = gdk_screen_get_default ();
-  visual = gdk_screen_get_rgba_visual (screen);
   display = gdk_display_get_default ();
-  monitor = gdk_display_get_primary_monitor (display);
+  monitors = gdk_display_get_monitors (display);
 
-  if (monitor)
-    gdk_monitor_get_geometry (monitor, &geom);
+  if (monitors != NULL && g_list_model_get_n_items (monitors) > 0)
+    {
+      monitor = GDK_MONITOR (g_list_model_get_item (monitors, 0));
+      gdk_monitor_get_geometry (monitor, &geom);
+      monitor_count = g_list_model_get_n_items (monitors);
+    }
   else
     {
       geom.x = 0;
       geom.y = 0;
-      geom.width = gdk_screen_get_width (screen);
-      geom.height = gdk_screen_get_height (screen);
+      geom.width = 1920;
+      geom.height = 1080;
     }
 
-  window = gtk_window_new (GTK_WINDOW_TOPLEVEL);
+  *width = geom.width;
+  *height = geom.height;
+
+  window = gtk_window_new ();
   gtk_window_set_decorated (GTK_WINDOW (window), FALSE);
-  gtk_window_set_skip_taskbar_hint (GTK_WINDOW (window), TRUE);
-  gtk_window_set_skip_pager_hint (GTK_WINDOW (window), TRUE);
   gtk_window_set_resizable (GTK_WINDOW (window), FALSE);
-  
-  if (gdk_screen_is_composited (screen) && visual)
+
+  gtk_window_set_default_size (GTK_WINDOW (window), geom.width, geom.height);
+  gtk_widget_set_size_request (window, geom.width, geom.height);
+
+  if (monitor_count > 1)
     {
-      gtk_widget_set_visual (window, visual);
-      gtk_widget_set_app_paintable (window, TRUE);
+      gtk_window_fullscreen (GTK_WINDOW (window));
+    }
+  else
+    {
+      gtk_window_present (GTK_WINDOW (window));
     }
 
-  gtk_window_move (GTK_WINDOW (window), geom.x, geom.y);
-  gtk_window_fullscreen (GTK_WINDOW (window));
-  gtk_widget_set_size_request (window, geom.width, geom.height);
-  gtk_widget_show (window);
+  gtk_widget_set_visible (window, TRUE);
 
   return window;
 }
@@ -214,11 +227,23 @@ emit_select_callback_in_idle (gpointer user_data)
   return FALSE;
 }
 
-static void
-screenshot_select_area_x11_async (CallbackData *cb_data)
+static gboolean
+quit_main_loop (gpointer user_data)
 {
-  select_area_filter_data data;
-  GdkCursor *cursor;
+  GMainLoop *loop = user_data;
+  g_main_loop_quit (loop);
+  return FALSE;
+}
+
+static void
+screenshot_select_area_wayland_async (CallbackData *cb_data)
+{
+  select_area_data data;
+  GtkEventController *motion_controller;
+  GtkEventController *button_controller;
+  GtkEventController *key_controller;
+  GMainLoop *main_loop;
+  int width, height;
 
   data.rect.x = 0;
   data.rect.y = 0;
@@ -228,21 +253,40 @@ screenshot_select_area_x11_async (CallbackData *cb_data)
   data.aborted = FALSE;
   data.start_x = 0;
   data.start_y = 0;
-  data.window = create_select_window();
 
-  cursor = gdk_cursor_new_for_display (gtk_widget_get_display (data.window), GDK_CROSSHAIR);
-  gdk_window_set_cursor (gtk_widget_get_window (data.window), cursor);
+  main_loop = g_main_loop_new (NULL, FALSE);
+
+  data.window = create_select_window (&width, &height);
+
+  data.drawing_area = GTK_DRAWING_AREA (gtk_drawing_area_new ());
+  gtk_drawing_area_set_draw_func (data.drawing_area, select_area_draw, &data, NULL);
+  gtk_widget_set_hexpand (GTK_WIDGET (data.drawing_area), TRUE);
+  gtk_widget_set_vexpand (GTK_WIDGET (data.drawing_area), TRUE);
+  gtk_window_set_child (GTK_WINDOW (data.window), GTK_WIDGET (data.drawing_area));
+  gtk_widget_set_visible (GTK_WIDGET (data.drawing_area), TRUE);
+
+  GdkCursor *cursor = gdk_cursor_new_from_name ("crosshair", NULL);
+  gtk_widget_set_cursor (GTK_WIDGET (data.window), cursor);
   g_object_unref (cursor);
 
-  g_signal_connect (data.window, "draw", G_CALLBACK (select_window_draw), &data);
-  g_signal_connect (data.window, "key-press-event", G_CALLBACK (select_area_key_press), &data);
-  g_signal_connect (data.window, "button-press-event", G_CALLBACK (select_area_button_press), &data);
-  g_signal_connect (data.window, "button-release-event", G_CALLBACK (select_area_button_release), &data);
-  g_signal_connect (data.window, "motion-notify-event", G_CALLBACK (select_area_motion_notify), &data);
+  key_controller = gtk_event_controller_key_new ();
+  g_signal_connect (key_controller, "key-pressed", G_CALLBACK (select_area_key_press), &data);
+  gtk_widget_add_controller (GTK_WIDGET (data.window), key_controller);
 
-  gtk_main ();
+  motion_controller = gtk_event_controller_motion_new ();
+  g_signal_connect (motion_controller, "motion", G_CALLBACK (select_area_motion), &data);
+  gtk_widget_add_controller (GTK_WIDGET (data.drawing_area), motion_controller);
 
-  gtk_widget_destroy (data.window);
+  button_controller = GTK_EVENT_CONTROLLER (gtk_gesture_click_new ());
+  g_signal_connect (button_controller, "pressed", G_CALLBACK (select_area_button_press), &data);
+  g_signal_connect (button_controller, "released", G_CALLBACK (select_area_button_release), &data);
+  gtk_widget_add_controller (GTK_WIDGET (data.drawing_area), button_controller);
+
+  g_signal_connect_swapped (data.window, "destroy", G_CALLBACK (quit_main_loop), main_loop);
+
+  g_main_loop_run (main_loop);
+
+  g_main_loop_unref (main_loop);
 
   cb_data->aborted = data.aborted;
   cb_data->rectangle = data.rect;
@@ -250,63 +294,15 @@ screenshot_select_area_x11_async (CallbackData *cb_data)
   g_timeout_add (200, emit_select_callback_in_idle, cb_data);
 }
 
-static void
-select_area_done (GObject *source_object,
-                  GAsyncResult *res,
-                  gpointer user_data)
-{
-  CallbackData *cb_data = user_data;
-  g_autoptr(GError) error = NULL;
-  g_autoptr(GVariant) ret = NULL;
-
-  ret = g_dbus_connection_call_finish (G_DBUS_CONNECTION (source_object), res, &error);
-  if (error != NULL)
-    {
-      if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-        {
-          cb_data->aborted = TRUE;
-          g_idle_add (emit_select_callback_in_idle, cb_data);
-          return;
-        }
-
-      g_message ("Unable to select area using GNOME Shell's builtin screenshot "
-                 "interface, using GTK selection.");
-
-      screenshot_select_area_x11_async (cb_data);
-      return;
-    }
-
-  g_variant_get (ret, "(iiii)",
-                 &cb_data->rectangle.x,
-                 &cb_data->rectangle.y,
-                 &cb_data->rectangle.width,
-                 &cb_data->rectangle.height);
-
-  g_idle_add (emit_select_callback_in_idle, cb_data);
-}
-
 void
 screenshot_select_area_async (SelectAreaCallback callback,
                               gpointer callback_data)
 {
   CallbackData *cb_data;
-  GDBusConnection *connection;
 
   cb_data = g_slice_new0 (CallbackData);
   cb_data->callback = callback;
   cb_data->callback_data = callback_data;
 
-  connection = g_application_get_dbus_connection (g_application_get_default ());
-  g_dbus_connection_call (connection,
-                          "org.gnome.Shell.Screenshot",
-                          "/org/gnome/Shell/Screenshot",
-                          "org.gnome.Shell.Screenshot",
-                          "SelectArea",
-                          NULL,
-                          NULL,
-                          G_DBUS_CALL_FLAGS_NONE,
-                          G_MAXINT,
-                          NULL,
-                          select_area_done,
-                          cb_data);
+  screenshot_select_area_wayland_async (cb_data);
 }

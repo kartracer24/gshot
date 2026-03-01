@@ -36,7 +36,6 @@ sources = [
   'screenshot-area-selection.c',
   'screenshot-backend.c',
   'screenshot-backend-shell.c',
-  'screenshot-backend-x11.c',
   'screenshot-backend-wayland.c',
   'screenshot-config.c',
   'screenshot-dialog.c',
@@ -52,11 +51,9 @@ include_directories = [
 
 dependencies = [
   mathlib_dep,
-  x11_dep,
-  xext_dep,
   glib_dep,
   gtk_dep,
-  libhandy_dep,
+  gtk_wayland_dep,
   wayland_client_dep,
   wayland_protocols_dep,
 ]
