@@ -43,7 +43,6 @@ struct _ScreenshotInteractiveDialog
   GtkWidget *radio_window;
   GtkWidget *radio_selection;
   GtkWidget *check_pointer;
-  GtkWidget *check_dark_mode;
   GtkWidget *spin_delay;
   GtkWidget *button_capture;
 };
@@ -64,34 +63,54 @@ set_mode (ScreenshotInteractiveDialog *self,
   gboolean take_window_shot = (mode == SCREENSHOT_MODE_WINDOW);
   gboolean take_area_shot = (mode == SCREENSHOT_MODE_SELECTION);
 
-  gtk_widget_set_sensitive (self->check_pointer, !take_area_shot);
+  if (self->check_pointer != NULL)
+    gtk_widget_set_sensitive (self->check_pointer, !take_area_shot);
+
+  if (self->radio_screen != NULL)
+    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (self->radio_screen), mode == SCREENSHOT_MODE_SCREEN);
+  if (self->radio_window != NULL)
+    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (self->radio_window), mode == SCREENSHOT_MODE_WINDOW);
+  if (self->radio_selection != NULL)
+    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (self->radio_selection), mode == SCREENSHOT_MODE_SELECTION);
 
   screenshot_config->take_window_shot = take_window_shot;
   screenshot_config->take_area_shot = take_area_shot;
 }
 
 static void
-screen_toggled_cb (GtkToggleButton             *button,
-                    ScreenshotInteractiveDialog *self)
+screen_toggled_cb (GtkToggleButton           *button,
+                   ScreenshotInteractiveDialog *self)
 {
   if (gtk_toggle_button_get_active (button))
-    set_mode (self, SCREENSHOT_MODE_SCREEN);
+    {
+      gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (self->radio_window), FALSE);
+      gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (self->radio_selection), FALSE);
+      set_mode (self, SCREENSHOT_MODE_SCREEN);
+    }
 }
 
 static void
-window_toggled_cb (GtkToggleButton             *button,
-                    ScreenshotInteractiveDialog *self)
+window_toggled_cb (GtkToggleButton           *button,
+                   ScreenshotInteractiveDialog *self)
 {
   if (gtk_toggle_button_get_active (button))
-    set_mode (self, SCREENSHOT_MODE_WINDOW);
+    {
+      gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (self->radio_screen), FALSE);
+      gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (self->radio_selection), FALSE);
+      set_mode (self, SCREENSHOT_MODE_WINDOW);
+    }
 }
 
 static void
-selection_toggled_cb (GtkToggleButton             *button,
-                      ScreenshotInteractiveDialog *self)
+selection_toggled_cb (GtkToggleButton           *button,
+                     ScreenshotInteractiveDialog *self)
 {
   if (gtk_toggle_button_get_active (button))
-    set_mode (self, SCREENSHOT_MODE_SELECTION);
+    {
+      gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (self->radio_screen), FALSE);
+      gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (self->radio_window), FALSE);
+      set_mode (self, SCREENSHOT_MODE_SELECTION);
+    }
 }
 
 static void
@@ -117,32 +136,6 @@ capture_button_clicked_cb (GtkButton                   *button,
 }
 
 static void
-dark_mode_toggled_cb (GtkSwitch                   *toggle,
-                      ScreenshotInteractiveDialog *self)
-{
-  GtkCssProvider *provider;
-  GdkDisplay *display;
-
-  screenshot_config->dark_mode = gtk_switch_get_active (toggle);
-
-  display = gdk_display_get_default ();
-  if (display == NULL)
-    return;
-
-  provider = gtk_css_provider_new ();
-  gtk_css_provider_load_from_string (provider, "");
-
-  if (screenshot_config->dark_mode)
-    g_object_set (provider, "prefers-color-scheme", GTK_INTERFACE_COLOR_SCHEME_DARK, NULL);
-
-  gtk_style_context_add_provider_for_display (display,
-                                             GTK_STYLE_PROVIDER (provider),
-                                             GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-
-  g_object_unref (provider);
-}
-
-static void
 screenshot_interactive_dialog_class_init (ScreenshotInteractiveDialogClass *klass)
 {
   signals[SIGNAL_CAPTURE] =
@@ -159,65 +152,111 @@ static void
 screenshot_interactive_dialog_init (ScreenshotInteractiveDialog *self)
 {
   GtkWidget *box;
-  GtkWidget *frame;
   GtkWidget *label;
-  GtkWidget *radio1, *radio2, *radio3;
+  GtkWidget *btn_screen, *btn_window, *btn_area;
+  GtkWidget *button_box;
 
   gtk_window_set_title (GTK_WINDOW (self), _("Screenshot"));
-  gtk_window_set_default_size (GTK_WINDOW (self), 300, 250);
+  gtk_window_set_default_size (GTK_WINDOW (self), 320, 280);
 
   box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 12);
-  gtk_widget_set_margin_top (box, 12);
-  gtk_widget_set_margin_bottom (box, 12);
-  gtk_widget_set_margin_start (box, 12);
-  gtk_widget_set_margin_end (box, 12);
+  gtk_widget_set_margin_top (box, 18);
+  gtk_widget_set_margin_bottom (box, 18);
+  gtk_widget_set_margin_start (box, 18);
+  gtk_widget_set_margin_end (box, 18);
   gtk_window_set_child (GTK_WINDOW (self), box);
 
-  frame = gtk_frame_new (_("Take a screenshot of:"));
-  gtk_box_append (GTK_BOX (box), frame);
+  GtkWidget *capture_label = gtk_label_new (_("Capture Area"));
+  gtk_label_set_xalign (GTK_LABEL (capture_label), 0.0);
+  gtk_box_append (GTK_BOX (box), capture_label);
 
-  GtkWidget *radio_box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
-  gtk_frame_set_child (GTK_FRAME (frame), radio_box);
+  button_box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_widget_add_css_class (button_box, "linked");
+  gtk_widget_set_margin_top (button_box, 6);
+  gtk_widget_set_margin_bottom (button_box, 6);
+  gtk_widget_set_margin_start (button_box, 6);
+  gtk_widget_set_margin_end (button_box, 6);
+  gtk_box_append (GTK_BOX (box), button_box);
 
-  radio1 = gtk_check_button_new_with_label (_("Entire screen"));
-  gtk_box_append (GTK_BOX (radio_box), radio1);
-  g_signal_connect (radio1, "toggled", G_CALLBACK (screen_toggled_cb), self);
-  self->radio_screen = radio1;
+  btn_screen = gtk_toggle_button_new ();
+  {
+    GtkWidget *btn_box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 4);
+    gtk_widget_set_halign (btn_box, GTK_ALIGN_CENTER);
+    gtk_widget_set_valign (btn_box, GTK_ALIGN_CENTER);
+    GtkWidget *img = gtk_image_new_from_icon_name ("display-symbolic");
+    g_object_set (img, "pixel-size", 24, NULL);
+    GtkWidget *lbl = gtk_label_new (_("Screen"));
+    gtk_box_append (GTK_BOX (btn_box), img);
+    gtk_box_append (GTK_BOX (btn_box), lbl);
+    gtk_button_set_child (GTK_BUTTON (btn_screen), btn_box);
+  }
+  gtk_widget_set_tooltip_text (btn_screen, _("Take a screenshot of the entire screen"));
+  gtk_widget_set_size_request (btn_screen, 90, 70);
+  gtk_box_append (GTK_BOX (button_box), btn_screen);
+  g_signal_connect (btn_screen, "toggled", G_CALLBACK (screen_toggled_cb), self);
+  self->radio_screen = btn_screen;
 
-  radio2 = gtk_check_button_new_with_label (_("Selected window"));
-  gtk_box_append (GTK_BOX (radio_box), radio2);
-  g_signal_connect (radio2, "toggled", G_CALLBACK (window_toggled_cb), self);
-  self->radio_window = radio2;
+  btn_window = gtk_toggle_button_new ();
+  {
+    GtkWidget *btn_box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 4);
+    gtk_widget_set_halign (btn_box, GTK_ALIGN_CENTER);
+    gtk_widget_set_valign (btn_box, GTK_ALIGN_CENTER);
+    GtkWidget *img = gtk_image_new_from_icon_name ("window-symbolic");
+    g_object_set (img, "pixel-size", 24, NULL);
+    GtkWidget *lbl = gtk_label_new (_("Window"));
+    gtk_box_append (GTK_BOX (btn_box), img);
+    gtk_box_append (GTK_BOX (btn_box), lbl);
+    gtk_button_set_child (GTK_BUTTON (btn_window), btn_box);
+  }
+  gtk_widget_set_tooltip_text (btn_window, _("Take a screenshot of a window"));
+  gtk_widget_set_sensitive (btn_window, FALSE);
+  gtk_widget_set_size_request (btn_window, 90, 70);
+  gtk_box_append (GTK_BOX (button_box), btn_window);
+  g_signal_connect (btn_window, "toggled", G_CALLBACK (window_toggled_cb), self);
+  self->radio_window = btn_window;
 
-  radio3 = gtk_check_button_new_with_label (_("Selected area"));
-  gtk_box_append (GTK_BOX (radio_box), radio3);
-  g_signal_connect (radio3, "toggled", G_CALLBACK (selection_toggled_cb), self);
-  self->radio_selection = radio3;
+  btn_area = gtk_toggle_button_new ();
+  {
+    GtkWidget *btn_box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 4);
+    gtk_widget_set_halign (btn_box, GTK_ALIGN_CENTER);
+    gtk_widget_set_valign (btn_box, GTK_ALIGN_CENTER);
+    GtkWidget *img = gtk_image_new_from_icon_name ("selection-symbolic");
+    g_object_set (img, "pixel-size", 24, NULL);
+    GtkWidget *lbl = gtk_label_new (_("Area"));
+    gtk_box_append (GTK_BOX (btn_box), img);
+    gtk_box_append (GTK_BOX (btn_box), lbl);
+    gtk_button_set_child (GTK_BUTTON (btn_area), btn_box);
+  }
+  gtk_widget_set_tooltip_text (btn_area, _("Select an area to capture"));
+  gtk_widget_set_size_request (btn_area, 90, 70);
+  gtk_box_append (GTK_BOX (button_box), btn_area);
+  g_signal_connect (btn_area, "toggled", G_CALLBACK (selection_toggled_cb), self);
+  self->radio_selection = btn_area;
 
-  frame = gtk_frame_new (NULL);
-  gtk_box_append (GTK_BOX (box), frame);
+  if (screenshot_config->take_window_shot)
+    set_mode (self, SCREENSHOT_MODE_WINDOW);
+  else if (screenshot_config->take_area_shot)
+    set_mode (self, SCREENSHOT_MODE_SELECTION);
+  else
+    set_mode (self, SCREENSHOT_MODE_SCREEN);
 
-  GtkWidget *options_box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 6);
-  gtk_frame_set_child (GTK_FRAME (frame), options_box);
+  GtkWidget *options_box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 8);
+  gtk_widget_set_margin_top (options_box, 6);
+  gtk_widget_set_margin_bottom (options_box, 6);
+  gtk_widget_set_margin_start (options_box, 6);
+  gtk_widget_set_margin_end (options_box, 6);
+  gtk_box_append (GTK_BOX (box), options_box);
 
   self->check_pointer = gtk_switch_new ();
-  label = gtk_label_new (_("Include pointer"));
+  label = gtk_label_new (_("Show Pointer"));
   GtkWidget *pointer_box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 6);
   gtk_box_append (GTK_BOX (pointer_box), self->check_pointer);
   gtk_box_append (GTK_BOX (pointer_box), label);
   gtk_box_append (GTK_BOX (options_box), pointer_box);
   g_signal_connect (self->check_pointer, "state-set", G_CALLBACK (include_pointer_toggled_cb), self);
 
-  self->check_dark_mode = gtk_switch_new ();
-  label = gtk_label_new (_("Dark mode"));
-  GtkWidget *dark_box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 6);
-  gtk_box_append (GTK_BOX (dark_box), self->check_dark_mode);
-  gtk_box_append (GTK_BOX (dark_box), label);
-  gtk_box_append (GTK_BOX (options_box), dark_box);
-  g_signal_connect (self->check_dark_mode, "state-set", G_CALLBACK (dark_mode_toggled_cb), self);
-
   GtkWidget *delay_box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 6);
-  label = gtk_label_new (_("Delay (seconds):"));
+  label = gtk_label_new (_("Delay in Seconds"));
   self->spin_delay = gtk_spin_button_new_with_range (0, 60, 1);
   gtk_box_append (GTK_BOX (delay_box), label);
   gtk_box_append (GTK_BOX (delay_box), self->spin_delay);
@@ -232,14 +271,14 @@ screenshot_interactive_dialog_init (ScreenshotInteractiveDialog *self)
   gtk_widget_set_visible (GTK_WIDGET (self), TRUE);
 
   if (screenshot_config->take_window_shot)
-    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (self->radio_window), TRUE);
-
-  if (screenshot_config->take_area_shot)
-    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (self->radio_selection), TRUE);
+    set_mode (self, SCREENSHOT_MODE_WINDOW);
+  else if (screenshot_config->take_area_shot)
+    set_mode (self, SCREENSHOT_MODE_SELECTION);
+  else
+    set_mode (self, SCREENSHOT_MODE_SCREEN);
 
   gtk_widget_set_sensitive (self->check_pointer, !screenshot_config->take_area_shot);
   gtk_switch_set_active (GTK_SWITCH (self->check_pointer), screenshot_config->include_pointer);
-  gtk_switch_set_active (GTK_SWITCH (self->check_dark_mode), screenshot_config->dark_mode);
 
   gtk_spin_button_set_value (GTK_SPIN_BUTTON (self->spin_delay), screenshot_config->delay);
 }

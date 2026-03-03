@@ -11,7 +11,6 @@ The standard GNOME desktop session does not use GNOME Screenshot any more.
 ### Dependencies
 
  - GLib 2.36
- - GTK+ 3.12
+ - GTK+ 4.20
  - Wayland
  - X11
-

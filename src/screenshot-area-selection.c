@@ -72,6 +72,8 @@ select_area_button_press (GtkEventController *controller,
                          double              y,
                          select_area_data   *data)
 {
+  g_print ("button_press: n_press=%d, x=%.0f, y=%.0f\n", n_press, x, y);
+
   if (data->button_pressed)
     return TRUE;
 
@@ -84,22 +86,59 @@ select_area_button_press (GtkEventController *controller,
   data->rect.height = 0;
 
   GtkWidget *widget = gtk_event_controller_get_widget (controller);
-  GdkSurface *surface = gtk_native_get_surface (gtk_widget_get_native (widget));
+  g_print ("button_press: widget=%p\n", widget);
+
+  if (widget == NULL)
+    {
+      g_print ("button_press: widget is NULL!\n");
+      return TRUE;
+    }
+
+  GtkNative *native = gtk_widget_get_native (widget);
+  g_print ("button_press: native=%p\n", native);
+
+  if (native == NULL)
+    {
+      g_print ("button_press: native is NULL!\n");
+      return TRUE;
+    }
+
+  GdkSurface *surface = gtk_native_get_surface (native);
+  g_print ("button_press: surface=%p\n", surface);
+
+  if (surface == NULL)
+    {
+      g_print ("button_press: surface is NULL!\n");
+      return TRUE;
+    }
+
   GdkDisplay *display = gtk_widget_get_display (widget);
+  g_print ("button_press: display=%p\n", display);
+
+  if (display == NULL)
+    {
+      g_print ("button_press: display is NULL!\n");
+      return TRUE;
+    }
+
   GdkMonitor *monitor = gdk_display_get_monitor_at_surface (display, surface);
+  g_print ("button_press: monitor=%p\n", monitor);
   screenshot_target_monitor = monitor;
+  g_print ("button_press: target_monitor set\n");
 
   gtk_widget_queue_draw (widget);
+  g_print ("button_press: queue_draw done\n");
 
   return TRUE;
 }
 
 static gboolean
 select_area_button_release (GtkEventController *controller,
-                            double              x,
-                            double              y,
-                            select_area_data   *data)
+                          double              x,
+                          double              y,
+                          select_area_data   *data)
 {
+  g_print ("button_release: start\n");
   if (!data->button_pressed)
     return TRUE;
 
@@ -108,7 +147,9 @@ select_area_button_release (GtkEventController *controller,
   data->rect.x = MIN ((gint)x, data->start_x);
   data->rect.y = MIN ((gint)y, data->start_y);
 
+  g_print ("button_release: destroying window\n");
   gtk_window_destroy (GTK_WINDOW (data->window));
+  g_print ("button_release: done\n");
 
   return TRUE;
 }
@@ -187,9 +228,14 @@ create_select_window (int *width, int *height)
   window = gtk_window_new ();
   gtk_window_set_decorated (GTK_WINDOW (window), FALSE);
   gtk_window_set_resizable (GTK_WINDOW (window), FALSE);
-
   gtk_window_set_default_size (GTK_WINDOW (window), geom.width, geom.height);
   gtk_widget_set_size_request (window, geom.width, geom.height);
+
+  GtkCssProvider *css = gtk_css_provider_new ();
+  gtk_css_provider_load_from_string (css, "window { background: transparent; }");
+  gtk_style_context_add_provider_for_display (gdk_display_get_default (),
+                                               GTK_STYLE_PROVIDER (css),
+                                               GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
   if (monitor_count > 1)
     {
@@ -245,6 +291,8 @@ screenshot_select_area_wayland_async (CallbackData *cb_data)
   GMainLoop *main_loop;
   int width, height;
 
+  g_print ("select_area_wayland_async: starting\n");
+
   data.rect.x = 0;
   data.rect.y = 0;
   data.rect.width  = 0;
@@ -255,42 +303,53 @@ screenshot_select_area_wayland_async (CallbackData *cb_data)
   data.start_y = 0;
 
   main_loop = g_main_loop_new (NULL, FALSE);
+  g_print ("creating select window\n");
 
   data.window = create_select_window (&width, &height);
 
+  g_print ("creating drawing area\n");
   data.drawing_area = GTK_DRAWING_AREA (gtk_drawing_area_new ());
   gtk_drawing_area_set_draw_func (data.drawing_area, select_area_draw, &data, NULL);
   gtk_widget_set_hexpand (GTK_WIDGET (data.drawing_area), TRUE);
   gtk_widget_set_vexpand (GTK_WIDGET (data.drawing_area), TRUE);
+  gtk_widget_set_can_focus (GTK_WIDGET (data.drawing_area), TRUE);
   gtk_window_set_child (GTK_WINDOW (data.window), GTK_WIDGET (data.drawing_area));
   gtk_widget_set_visible (GTK_WIDGET (data.drawing_area), TRUE);
 
+  g_print ("setting cursor\n");
   GdkCursor *cursor = gdk_cursor_new_from_name ("crosshair", NULL);
   gtk_widget_set_cursor (GTK_WIDGET (data.window), cursor);
   g_object_unref (cursor);
 
+  g_print ("creating key controller\n");
   key_controller = gtk_event_controller_key_new ();
   g_signal_connect (key_controller, "key-pressed", G_CALLBACK (select_area_key_press), &data);
   gtk_widget_add_controller (GTK_WIDGET (data.window), key_controller);
 
+  g_print ("creating motion controller\n");
   motion_controller = gtk_event_controller_motion_new ();
   g_signal_connect (motion_controller, "motion", G_CALLBACK (select_area_motion), &data);
   gtk_widget_add_controller (GTK_WIDGET (data.drawing_area), motion_controller);
 
+  g_print ("creating button controller\n");
   button_controller = GTK_EVENT_CONTROLLER (gtk_gesture_click_new ());
   g_signal_connect (button_controller, "pressed", G_CALLBACK (select_area_button_press), &data);
   g_signal_connect (button_controller, "released", G_CALLBACK (select_area_button_release), &data);
   gtk_widget_add_controller (GTK_WIDGET (data.drawing_area), button_controller);
 
+  g_print ("connecting destroy signal\n");
   g_signal_connect_swapped (data.window, "destroy", G_CALLBACK (quit_main_loop), main_loop);
 
+  g_print ("running main loop\n");
   g_main_loop_run (main_loop);
 
+  g_print ("main loop done\n");
   g_main_loop_unref (main_loop);
 
   cb_data->aborted = data.aborted;
   cb_data->rectangle = data.rect;
 
+  g_print ("adding idle callback\n");
   g_timeout_add (200, emit_select_callback_in_idle, cb_data);
 }
 
@@ -298,6 +357,7 @@ void
 screenshot_select_area_async (SelectAreaCallback callback,
                               gpointer callback_data)
 {
+  g_print ("screenshot_select_area_async called\n");
   CallbackData *cb_data;
 
   cb_data = g_slice_new0 (CallbackData);
