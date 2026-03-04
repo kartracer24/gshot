@@ -132,7 +132,8 @@ static void
 screenshot_dialog_focus_cb (gint                   response,
                             ScreenshotApplication *self)
 {
-  gtk_widget_grab_focus (screenshot_dialog_get_filename_entry (self->dialog));
+  if (self->dialog != NULL && GTK_IS_WIDGET (self->dialog))
+    gtk_widget_grab_focus (screenshot_dialog_get_filename_entry (self->dialog));
 }
 
 static void
