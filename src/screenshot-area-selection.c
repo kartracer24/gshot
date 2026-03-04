@@ -207,20 +207,32 @@ create_select_window (int *width, int *height)
   guint monitor_count = 0;
 
   display = gdk_display_get_default ();
-  monitors = gdk_display_get_monitors (display);
 
-  if (monitors != NULL && g_list_model_get_n_items (monitors) > 0)
+  if (screenshot_target_monitor != NULL)
     {
-      monitor = GDK_MONITOR (g_list_model_get_item (monitors, 0));
+      monitor = screenshot_target_monitor;
       gdk_monitor_get_geometry (monitor, &geom);
-      monitor_count = g_list_model_get_n_items (monitors);
+      monitors = gdk_display_get_monitors (display);
+      if (monitors != NULL)
+        monitor_count = g_list_model_get_n_items (monitors);
     }
   else
     {
-      geom.x = 0;
-      geom.y = 0;
-      geom.width = 1920;
-      geom.height = 1080;
+      monitors = gdk_display_get_monitors (display);
+
+      if (monitors != NULL && g_list_model_get_n_items (monitors) > 0)
+        {
+          monitor = GDK_MONITOR (g_list_model_get_item (monitors, 0));
+          gdk_monitor_get_geometry (monitor, &geom);
+          monitor_count = g_list_model_get_n_items (monitors);
+        }
+      else
+        {
+          geom.x = 0;
+          geom.y = 0;
+          geom.width = 1920;
+          geom.height = 1080;
+        }
     }
 
   *width = geom.width;

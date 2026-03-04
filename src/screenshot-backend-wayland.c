@@ -436,10 +436,8 @@ screenshot_backend_wayland_capture_screen (WaylandState *state,
                      monitor_geom.x, monitor_geom.y,
                      rectangle->x, rectangle->y, rectangle->width, rectangle->height);
           
-          /* Adjust rectangle to be relative to the monitor */
+          /* Rectangle is already relative to the monitor from the selection window */
           capture_rect = *rectangle;
-          capture_rect.x = rectangle->x - monitor_geom.x;
-          capture_rect.y = rectangle->y - monitor_geom.y;
           
           g_message ("Area capture: adjusted rect: %d,%d %dx%d",
                      capture_rect.x, capture_rect.y, capture_rect.width, capture_rect.height);
