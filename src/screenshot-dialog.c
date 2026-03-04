@@ -165,6 +165,75 @@ screenshot_dialog_class_init (ScreenshotDialogClass *klass)
 static void
 screenshot_dialog_init (ScreenshotDialog *self)
 {
+  GtkWidget *box;
+  GtkWidget *content_box;
+  GtkWidget *grid;
+  GtkWidget *name_label;
+  GtkWidget *folder_label;
+  GtkWidget *buttons_box;
+
+  self->preview_image = NULL;
+
+  box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
+  gtk_window_set_child (GTK_WINDOW (self), box);
+  gtk_window_set_title (GTK_WINDOW (self), _("Save Screenshot"));
+
+  content_box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 24);
+  gtk_widget_set_margin_top (content_box, 24);
+  gtk_widget_set_margin_bottom (content_box, 24);
+  gtk_widget_set_margin_start (content_box, 24);
+  gtk_widget_set_margin_end (content_box, 24);
+  gtk_box_append (GTK_BOX (box), content_box);
+
+  self->preview_darea = gtk_drawing_area_new ();
+  gtk_widget_set_size_request (self->preview_darea, 256, 256);
+  gtk_widget_set_hexpand (self->preview_darea, TRUE);
+  gtk_widget_set_vexpand (self->preview_darea, TRUE);
+  gtk_drawing_area_set_draw_func (GTK_DRAWING_AREA (self->preview_darea),
+                                  (GtkDrawingAreaDrawFunc) preview_draw_cb, self, NULL);
+  gtk_box_append (GTK_BOX (content_box), self->preview_darea);
+
+  grid = gtk_grid_new ();
+  gtk_grid_set_row_spacing (GTK_GRID (grid), 6);
+  gtk_grid_set_column_spacing (GTK_GRID (grid), 12);
+  gtk_box_append (GTK_BOX (content_box), grid);
+
+  name_label = gtk_label_new_with_mnemonic (_("_Name:"));
+  gtk_grid_attach (GTK_GRID (grid), name_label, 0, 0, 1, 1);
+  gtk_widget_set_halign (name_label, GTK_ALIGN_END);
+
+  self->filename_entry = gtk_entry_new ();
+  gtk_widget_set_hexpand (self->filename_entry, TRUE);
+  gtk_entry_set_activates_default (GTK_ENTRY (self->filename_entry), TRUE);
+  gtk_grid_attach (GTK_GRID (grid), self->filename_entry, 1, 0, 1, 1);
+  gtk_label_set_mnemonic_widget (GTK_LABEL (name_label), self->filename_entry);
+
+  folder_label = gtk_label_new_with_mnemonic (_("F_older:"));
+  gtk_grid_attach (GTK_GRID (grid), folder_label, 0, 1, 1, 1);
+  gtk_widget_set_halign (folder_label, GTK_ALIGN_END);
+
+  self->save_widget = gtk_label_new (g_get_user_special_dir (G_USER_DIRECTORY_PICTURES));
+  gtk_grid_attach (GTK_GRID (grid), self->save_widget, 1, 1, 1, 1);
+  gtk_label_set_mnemonic_widget (GTK_LABEL (folder_label), self->save_widget);
+
+  buttons_box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 6);
+  gtk_box_append (GTK_BOX (content_box), buttons_box);
+
+  self->back_button = gtk_button_new_with_mnemonic (_("_Cancel"));
+  gtk_box_append (GTK_BOX (buttons_box), self->back_button);
+  g_signal_connect (self->back_button, "clicked", G_CALLBACK (back_clicked_cb), self);
+
+  self->copy_button = gtk_button_new_with_mnemonic (_("C_opy to Clipboard"));
+  gtk_box_append (GTK_BOX (buttons_box), self->copy_button);
+  g_signal_connect (self->copy_button, "clicked", G_CALLBACK (copy_clicked_cb), self);
+
+  self->save_button = gtk_button_new_with_mnemonic (_("_Save"));
+  gtk_widget_add_css_class (self->save_button, "suggested-action");
+  gtk_box_append (GTK_BOX (buttons_box), self->save_button);
+  g_signal_connect (self->save_button, "clicked", G_CALLBACK (save_clicked_cb), self);
+
+  gtk_widget_activate_default (self->save_button);
+  gtk_window_set_default_widget (GTK_WINDOW (self), self->save_button);
 }
 
 ScreenshotDialog *
@@ -190,7 +259,7 @@ screenshot_dialog_new (GtkApplication *app,
 
   self->screenshot = screenshot;
 
-  gtk_widget_set_visible (GTK_WIDGET (self), TRUE);
+  gtk_window_present (GTK_WINDOW (self));
 
   ext = g_utf8_strrchr (current_name, -1, '.');
   if (ext)
