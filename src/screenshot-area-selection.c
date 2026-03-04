@@ -134,6 +134,7 @@ select_area_button_press (GtkEventController *controller,
 
 static gboolean
 select_area_button_release (GtkEventController *controller,
+                          gint                n_press,
                           double              x,
                           double              y,
                           select_area_data   *data)
@@ -231,11 +232,26 @@ create_select_window (int *width, int *height)
   gtk_window_set_default_size (GTK_WINDOW (window), geom.width, geom.height);
   gtk_widget_set_size_request (window, geom.width, geom.height);
 
-  GtkCssProvider *css = gtk_css_provider_new ();
-  gtk_css_provider_load_from_string (css, "window { background: transparent; }");
-  gtk_style_context_add_provider_for_display (gdk_display_get_default (),
-                                               GTK_STYLE_PROVIDER (css),
-                                               GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  GtkCssProvider *css_provider = gtk_css_provider_new ();
+  gtk_css_provider_load_from_string (css_provider,
+      ".window { background-color: rgba(0, 0, 0, 0.0); }");
+
+  gtk_style_context_add_provider_for_display (
+      gtk_widget_get_display (window),
+      (GtkStyleProvider *) css_provider, GTK_STYLE_PROVIDER_PRIORITY_USER);
+
+  gtk_widget_add_css_class (window, "window");
+
+  if (monitor_count > 1)
+    {
+      gtk_window_fullscreen (GTK_WINDOW (window));
+    }
+  else
+    {
+      gtk_window_present (GTK_WINDOW (window));
+    }
+
+  gtk_widget_set_visible (window, TRUE);
 
   if (monitor_count > 1)
     {
