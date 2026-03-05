@@ -303,8 +303,13 @@ save_file_create_ready_cb (GObject *source,
   g_autoptr(GError) error = NULL;
   g_autofree gchar *basename = g_file_get_basename (G_FILE (source));
   g_autofree gchar *format = NULL;
-  gchar *extension = g_strrstr (basename, ".");
+  gchar *extension;
   GSList *formats = NULL;
+
+  if (basename == NULL)
+    basename = g_strdup ("Screenshot.png");
+
+  extension = g_strrstr (basename, ".");
 
   if (extension == NULL)
     extension = "png";
@@ -351,7 +356,7 @@ screenshot_save_to_file (ScreenshotApplication *self)
   if (self->dialog != NULL)
     screenshot_dialog_set_busy (self->dialog, TRUE);
 
-  target_file = g_file_new_for_uri (self->save_uri);
+  target_file = g_file_new_for_path (self->save_uri);
 
   if (self->should_overwrite)
     {

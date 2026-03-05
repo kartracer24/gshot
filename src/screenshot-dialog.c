@@ -291,8 +291,6 @@ screenshot_dialog_get_uri (ScreenshotDialog *self)
   file = g_uri_escape_string (file_name, NULL, FALSE);
 
   tmp = g_build_filename (folder, file, NULL);
-  g_free (folder);
-  g_free (file);
 
   return tmp;
 }

@@ -13,4 +13,3 @@ The standard GNOME desktop session does not use GNOME Screenshot any more.
  - GLib 2.36
  - GTK+ 4.20
  - Wayland
- - X11
