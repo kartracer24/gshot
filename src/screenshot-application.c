@@ -704,20 +704,15 @@ capture_clicked_cb (ScreenshotInteractiveDialog *dialog,
 {
   /* Store target monitor before hiding the window */
   GdkDisplay *display = gdk_display_get_default ();
-  GList *windows = gtk_application_get_windows (GTK_APPLICATION (self));
-  if (windows)
+  if (dialog)
     {
-      GtkWindow *window = GTK_WINDOW (windows->data);
-      if (window)
+      GtkNative *native = gtk_widget_get_native (GTK_WIDGET (dialog));
+      if (native)
         {
-          GtkNative *native = gtk_widget_get_native (GTK_WIDGET (window));
-          if (native)
+          GdkSurface *surface = gtk_native_get_surface (native);
+          if (surface)
             {
-              GdkSurface *surface = gtk_native_get_surface (native);
-              if (surface)
-                {
-                  screenshot_target_monitor = gdk_display_get_monitor_at_surface (display, surface);
-                }
+              screenshot_target_monitor = gdk_display_get_monitor_at_surface (display, surface);
             }
         }
     }
@@ -840,13 +835,12 @@ static GActionEntry action_entries[] = {
 static void
 setup_color_scheme (gboolean dark_mode)
 {
-  GtkCssProvider *provider;
-  GdkDisplay *display;
   GtkSettings *settings;
-  const gchar *gtk_theme;
+  GdkDisplay *display;
+  GtkCssProvider *provider;
 
   display = gdk_display_get_default ();
-  if (display == NULL)
+  if (!display)
     return;
 
   settings = gtk_settings_get_default ();
