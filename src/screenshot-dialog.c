@@ -170,13 +170,17 @@ screenshot_dialog_init (ScreenshotDialog *self)
   GtkWidget *grid;
   GtkWidget *name_label;
   GtkWidget *folder_label;
-  GtkWidget *buttons_box;
+
 
   self->preview_image = NULL;
 
+  GtkWidget *header_bar;
+  header_bar = gtk_header_bar_new ();
+  gtk_window_set_titlebar (GTK_WINDOW (self), header_bar);
+  gtk_window_set_title (GTK_WINDOW (self), _("Save Screenshot"));
+
   box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 0);
   gtk_window_set_child (GTK_WINDOW (self), box);
-  gtk_window_set_title (GTK_WINDOW (self), _("Save Screenshot"));
 
   content_box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 24);
   gtk_widget_set_margin_top (content_box, 24);
@@ -216,21 +220,18 @@ screenshot_dialog_init (ScreenshotDialog *self)
   gtk_grid_attach (GTK_GRID (grid), self->save_widget, 1, 1, 1, 1);
   gtk_label_set_mnemonic_widget (GTK_LABEL (folder_label), self->save_widget);
 
-  buttons_box = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 6);
-  gtk_box_append (GTK_BOX (content_box), buttons_box);
-
   self->back_button = gtk_button_new_with_mnemonic (_("_Cancel"));
-  gtk_box_append (GTK_BOX (buttons_box), self->back_button);
+  gtk_header_bar_pack_start (GTK_HEADER_BAR (header_bar), self->back_button);
   g_signal_connect (self->back_button, "clicked", G_CALLBACK (back_clicked_cb), self);
-
-  self->copy_button = gtk_button_new_with_mnemonic (_("C_opy to Clipboard"));
-  gtk_box_append (GTK_BOX (buttons_box), self->copy_button);
-  g_signal_connect (self->copy_button, "clicked", G_CALLBACK (copy_clicked_cb), self);
 
   self->save_button = gtk_button_new_with_mnemonic (_("_Save"));
   gtk_widget_add_css_class (self->save_button, "suggested-action");
-  gtk_box_append (GTK_BOX (buttons_box), self->save_button);
+  gtk_header_bar_pack_end (GTK_HEADER_BAR (header_bar), self->save_button);
   g_signal_connect (self->save_button, "clicked", G_CALLBACK (save_clicked_cb), self);
+
+  self->copy_button = gtk_button_new_with_mnemonic (_("C_opy to Clipboard"));
+  gtk_header_bar_pack_end (GTK_HEADER_BAR (header_bar), self->copy_button);
+  g_signal_connect (self->copy_button, "clicked", G_CALLBACK (copy_clicked_cb), self);
 
   gtk_widget_activate_default (self->save_button);
   gtk_window_set_default_widget (GTK_WINDOW (self), self->save_button);

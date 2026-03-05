@@ -171,6 +171,9 @@ screenshot_interactive_dialog_init (ScreenshotInteractiveDialog *self)
   GtkWidget *btn_screen, *btn_window, *btn_area;
   GtkWidget *button_box;
 
+  GtkWidget *title_bar = gtk_header_bar_new ();
+  gtk_window_set_titlebar(GTK_WINDOW (self), title_bar);
+
   gtk_window_set_title (GTK_WINDOW (self), _("Screenshot"));
   gtk_window_set_default_size (GTK_WINDOW (self), 320, 280);
 
@@ -199,14 +202,14 @@ screenshot_interactive_dialog_init (ScreenshotInteractiveDialog *self)
     gtk_widget_set_halign (btn_box, GTK_ALIGN_CENTER);
     gtk_widget_set_valign (btn_box, GTK_ALIGN_CENTER);
     GtkWidget *img = gtk_image_new_from_icon_name ("display-symbolic");
-    g_object_set (img, "pixel-size", 24, NULL);
+    g_object_set (img, "pixel-size", 48, NULL);
     GtkWidget *lbl = gtk_label_new (_("Screen"));
     gtk_box_append (GTK_BOX (btn_box), img);
     gtk_box_append (GTK_BOX (btn_box), lbl);
     gtk_button_set_child (GTK_BUTTON (btn_screen), btn_box);
   }
   gtk_widget_set_tooltip_text (btn_screen, _("Take a screenshot of the entire screen"));
-  gtk_widget_set_size_request (btn_screen, 90, 70);
+  gtk_widget_set_size_request (btn_screen, 120, 100);
   gtk_box_append (GTK_BOX (button_box), btn_screen);
   g_signal_connect (btn_screen, "toggled", G_CALLBACK (screen_toggled_cb), self);
   self->radio_screen = btn_screen;
@@ -217,7 +220,7 @@ screenshot_interactive_dialog_init (ScreenshotInteractiveDialog *self)
     gtk_widget_set_halign (btn_box, GTK_ALIGN_CENTER);
     gtk_widget_set_valign (btn_box, GTK_ALIGN_CENTER);
     GtkWidget *img = gtk_image_new_from_icon_name ("window-symbolic");
-    g_object_set (img, "pixel-size", 24, NULL);
+    g_object_set (img, "pixel-size", 48, NULL);
     GtkWidget *lbl = gtk_label_new (_("Window"));
     gtk_box_append (GTK_BOX (btn_box), img);
     gtk_box_append (GTK_BOX (btn_box), lbl);
@@ -225,7 +228,7 @@ screenshot_interactive_dialog_init (ScreenshotInteractiveDialog *self)
   }
   gtk_widget_set_tooltip_text (btn_window, _("Take a screenshot of a window"));
   gtk_widget_set_sensitive (btn_window, FALSE);
-  gtk_widget_set_size_request (btn_window, 90, 70);
+  gtk_widget_set_size_request (btn_window, 120, 100);
   gtk_box_append (GTK_BOX (button_box), btn_window);
   g_signal_connect (btn_window, "toggled", G_CALLBACK (window_toggled_cb), self);
   self->radio_window = btn_window;
@@ -236,14 +239,14 @@ screenshot_interactive_dialog_init (ScreenshotInteractiveDialog *self)
     gtk_widget_set_halign (btn_box, GTK_ALIGN_CENTER);
     gtk_widget_set_valign (btn_box, GTK_ALIGN_CENTER);
     GtkWidget *img = gtk_image_new_from_icon_name ("selection-symbolic");
-    g_object_set (img, "pixel-size", 24, NULL);
+    g_object_set (img, "pixel-size", 48, NULL);
     GtkWidget *lbl = gtk_label_new (_("Area"));
     gtk_box_append (GTK_BOX (btn_box), img);
     gtk_box_append (GTK_BOX (btn_box), lbl);
     gtk_button_set_child (GTK_BUTTON (btn_area), btn_box);
   }
   gtk_widget_set_tooltip_text (btn_area, _("Select an area to capture"));
-  gtk_widget_set_size_request (btn_area, 90, 70);
+  gtk_widget_set_size_request (btn_area, 120, 100);
   gtk_box_append (GTK_BOX (button_box), btn_area);
   g_signal_connect (btn_area, "toggled", G_CALLBACK (selection_toggled_cb), self);
   self->radio_selection = btn_area;
@@ -279,8 +282,8 @@ screenshot_interactive_dialog_init (ScreenshotInteractiveDialog *self)
   g_signal_connect (self->spin_delay, "value-changed", G_CALLBACK (delay_spin_value_changed_cb), self);
 
   self->button_capture = gtk_button_new_with_label (_("Take Screenshot"));
-  gtk_widget_set_hexpand (self->button_capture, TRUE);
-  gtk_box_append (GTK_BOX (box), self->button_capture);
+  gtk_widget_add_css_class (self->button_capture, "suggested-action");
+  gtk_header_bar_pack_start (GTK_HEADER_BAR (title_bar), self->button_capture);
   g_signal_connect (self->button_capture, "clicked", G_CALLBACK (capture_button_clicked_cb), self);
 
   gtk_widget_set_visible (GTK_WIDGET (self), TRUE);

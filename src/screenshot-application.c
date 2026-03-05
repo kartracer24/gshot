@@ -852,19 +852,10 @@ setup_color_scheme (gboolean dark_mode)
   settings = gtk_settings_get_default ();
   if (settings)
     {
-      gtk_theme = g_getenv ("GTK_THEME");
-      if (gtk_theme)
-        {
-          g_object_set (settings, "gtk-theme-name", gtk_theme, NULL);
-        }
-      else if (dark_mode)
-        {
-          g_object_set (settings, "gtk-theme-name", "Adwaita-dark", NULL);
-        }
+      if (dark_mode)
+        g_object_set (settings, "gtk-application-prefer-dark-theme", TRUE, NULL);
       else
-        {
-          g_object_set (settings, "gtk-theme-name", "Adwaita", NULL);
-        }
+        g_object_set (settings, "gtk-application-prefer-dark-theme", FALSE, NULL);
     }
 
   provider = gtk_css_provider_new ();
