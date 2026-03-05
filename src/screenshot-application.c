@@ -389,8 +389,10 @@ screenshot_save_to_clipboard (ScreenshotApplication *self)
 {
   GdkClipboard *clipboard;
   GdkTexture *texture;
+  GdkDisplay *display;
 
-  clipboard = gtk_widget_get_clipboard (GTK_WIDGET (self));
+  display = gdk_display_get_default ();
+  clipboard = gdk_display_get_clipboard (display);
   texture = gdk_texture_new_for_pixbuf (self->screenshot);
   gdk_clipboard_set_texture (clipboard, texture);
 }
