@@ -35,6 +35,7 @@
 #define AUTO_SAVE_DIRECTORY_KEY "auto-save-directory"
 #define LAST_SAVE_DIRECTORY_KEY "last-save-directory"
 #define DEFAULT_FILE_TYPE_KEY   "default-file-type"
+#define CAPTURE_MODE_KEY        "capture-mode"
 
 #define CONFIG_DIR_NAME        "gshot"
 #define CONFIG_FILE_NAME       "config"
@@ -115,6 +116,16 @@ screenshot_load_config (void)
   config->take_window_shot = FALSE;
   config->take_area_shot = FALSE;
 
+  if (g_key_file_has_key (keyfile, CONFIG_GROUP, CAPTURE_MODE_KEY, NULL))
+    {
+      gint mode = g_key_file_get_integer (keyfile, CONFIG_GROUP, CAPTURE_MODE_KEY, NULL);
+      g_key_file_set_integer (keyfile, CONFIG_GROUP, CAPTURE_MODE_KEY, mode);
+      if (mode == 1)
+        config->take_window_shot = TRUE;
+      else if (mode == 2)
+        config->take_area_shot = TRUE;
+    }
+
   screenshot_config = config;
 
   config_path = get_config_path ();
@@ -128,12 +139,19 @@ screenshot_save_config (void)
   ScreenshotConfig *c = screenshot_config;
   gchar *config_path;
   GError *error = NULL;
+  gint mode = 0;
 
   g_assert (c != NULL);
+
+  if (c->take_window_shot)
+    mode = 1;
+  else if (c->take_area_shot)
+    mode = 2;
 
   g_key_file_set_boolean (c->keyfile, CONFIG_GROUP, INCLUDE_POINTER_KEY, c->include_pointer);
   g_key_file_set_boolean (c->keyfile, CONFIG_GROUP, DARK_MODE_KEY, c->dark_mode);
   g_key_file_set_integer (c->keyfile, CONFIG_GROUP, DELAY_KEY, c->delay);
+  g_key_file_set_integer (c->keyfile, CONFIG_GROUP, CAPTURE_MODE_KEY, mode);
 
   config_path = get_config_path ();
   g_key_file_save_to_file (c->keyfile, config_path, &error);
@@ -208,8 +226,17 @@ screenshot_config_parse_command_line (gboolean clipboard_arg,
         screenshot_config->file = g_file_new_for_commandline_arg (file_arg);
     }
 
-  screenshot_config->take_window_shot = window_arg;
-  screenshot_config->take_area_shot = area_arg;
+  if (window_arg)
+    {
+      screenshot_config->take_window_shot = TRUE;
+      screenshot_config->take_area_shot = FALSE;
+    }
+  else if (area_arg)
+    {
+      screenshot_config->take_window_shot = FALSE;
+      screenshot_config->take_area_shot = TRUE;
+    }
+  /* If neither is provided, keep the values from config file */
 
   return TRUE;
 }

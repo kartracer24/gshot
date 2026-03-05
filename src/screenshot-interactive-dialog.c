@@ -56,6 +56,10 @@ enum {
 
 static guint signals[N_SIGNALS];
 
+static void screen_toggled_cb (GtkToggleButton *button, ScreenshotInteractiveDialog *self);
+static void window_toggled_cb (GtkToggleButton *button, ScreenshotInteractiveDialog *self);
+static void selection_toggled_cb (GtkToggleButton *button, ScreenshotInteractiveDialog *self);
+
 static void
 set_mode (ScreenshotInteractiveDialog *self,
           ScreenshotMode               mode)
@@ -63,8 +67,15 @@ set_mode (ScreenshotInteractiveDialog *self,
   gboolean take_window_shot = (mode == SCREENSHOT_MODE_WINDOW);
   gboolean take_area_shot = (mode == SCREENSHOT_MODE_SELECTION);
 
+  screenshot_config->take_window_shot = take_window_shot;
+  screenshot_config->take_area_shot = take_area_shot;
+
   if (self->check_pointer != NULL)
     gtk_widget_set_sensitive (self->check_pointer, !take_area_shot);
+
+  g_signal_handlers_block_by_func (self->radio_screen, screen_toggled_cb, self);
+  g_signal_handlers_block_by_func (self->radio_window, window_toggled_cb, self);
+  g_signal_handlers_block_by_func (self->radio_selection, selection_toggled_cb, self);
 
   if (self->radio_screen != NULL)
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (self->radio_screen), mode == SCREENSHOT_MODE_SCREEN);
@@ -73,43 +84,47 @@ set_mode (ScreenshotInteractiveDialog *self,
   if (self->radio_selection != NULL)
     gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (self->radio_selection), mode == SCREENSHOT_MODE_SELECTION);
 
-  screenshot_config->take_window_shot = take_window_shot;
-  screenshot_config->take_area_shot = take_area_shot;
+  g_signal_handlers_unblock_by_func (self->radio_screen, screen_toggled_cb, self);
+  g_signal_handlers_unblock_by_func (self->radio_window, window_toggled_cb, self);
+  g_signal_handlers_unblock_by_func (self->radio_selection, selection_toggled_cb, self);
 }
 
 static void
 screen_toggled_cb (GtkToggleButton           *button,
-                   ScreenshotInteractiveDialog *self)
+                    ScreenshotInteractiveDialog *self)
 {
   if (gtk_toggle_button_get_active (button))
     {
       gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (self->radio_window), FALSE);
       gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (self->radio_selection), FALSE);
       set_mode (self, SCREENSHOT_MODE_SCREEN);
+      screenshot_save_config ();
     }
 }
 
 static void
 window_toggled_cb (GtkToggleButton           *button,
-                   ScreenshotInteractiveDialog *self)
+                    ScreenshotInteractiveDialog *self)
 {
   if (gtk_toggle_button_get_active (button))
     {
       gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (self->radio_screen), FALSE);
       gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (self->radio_selection), FALSE);
       set_mode (self, SCREENSHOT_MODE_WINDOW);
+      screenshot_save_config ();
     }
 }
 
 static void
 selection_toggled_cb (GtkToggleButton           *button,
-                     ScreenshotInteractiveDialog *self)
+                      ScreenshotInteractiveDialog *self)
 {
   if (gtk_toggle_button_get_active (button))
     {
       gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (self->radio_screen), FALSE);
       gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (self->radio_window), FALSE);
       set_mode (self, SCREENSHOT_MODE_SELECTION);
+      screenshot_save_config ();
     }
 }
 

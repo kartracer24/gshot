@@ -609,8 +609,6 @@ screenshot_start (ScreenshotApplication *self)
     {
       start_screenshot_timeout (self);
     }
-
-  screenshot_save_config ();
 }
 
 static gboolean version_arg = FALSE;

@@ -269,10 +269,11 @@ screenshot_dialog_new (GtkApplication *app,
 
   if (GTK_IS_WIDGET (self->filename_entry))
     {
+      gtk_editable_set_text (GTK_EDITABLE (self->filename_entry), current_name);
       gtk_widget_grab_focus (self->filename_entry);
       gtk_editable_select_region (GTK_EDITABLE (self->filename_entry),
-                                 0,
-                                 pos);
+                                  0,
+                                  pos);
     }
 
   return self;
