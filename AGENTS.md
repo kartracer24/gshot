@@ -8,3 +8,12 @@
 - You do not just make assumptions, you verify
 - The user can make mistakes or speculate, do not assume they are always right
 
+## Create tarball
+
+```
+cd /tmp && rm -rf gshot-alpha2 && mkdir gshot-alpha2 && cd gshot-alpha2 && git -C /home/bruno/vscode/gnome-screenshot archive HEAD | tar -x && rm -rf bin && cd .. && tar -czf /home/bruno/vscode/gnome-screenshot/bin/gshot-alpha2.tar.gz gshot-alpha2
+```
+
+```
+sha256sum /home/bruno/vscode/gnome-screenshot/bin/gshot-alpha2.tar.gz
+```
