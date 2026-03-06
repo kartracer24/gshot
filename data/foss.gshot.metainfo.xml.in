@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2014 Richard Hughes <richard@hughsie.com> -->
+<component type="desktop-application">
+  <id>foss.gshot.desktop</id>
+  <launchable type="desktop-id">foss.gshot.desktop</launchable>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-2.0+</project_license>
+  <name>GShot</name>
+  <summary>Save images of your screen or individual windows</summary>
+  <description>
+    <p>
+      GShot is a simple utility that lets you take pictures of your computer screen.
+      Screenshots can be of your whole screen, any specific application, or a selected
+      rectangular area.
+      You can also copy the captured screenshot directly into the clipboard and
+      paste it into other applications.
+    </p>
+  </description>
+  <kudos>
+    <kudo>HiDpiIcon</kudo>
+    <kudo>ModernToolkit</kudo>
+  </kudos>
+  <translation type="gettext">gshot</translation>
+  <content_rating type="oars-1.0" />
+</component>

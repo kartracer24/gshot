@@ -63,7 +63,7 @@ c_args = [
 ]
 
 executable(
-  'gnome-screenshot',
+  'gshot',
   sources + resources,
   include_directories: include_directories,
   dependencies: dependencies,

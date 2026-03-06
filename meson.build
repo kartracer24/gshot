@@ -1,5 +1,5 @@
 project(
-  'gnome-screenshot',
+  'gshot',
   'c',
   version: '41.0',
   license: 'GPLv2+',
