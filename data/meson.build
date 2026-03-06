@@ -63,9 +63,9 @@ resources = gnome.compile_resources(
   c_name: 'screenshot'
 )
 
-install_data(
-  'gshot.1',
-  install_dir: join_paths(get_option('mandir'), 'man1')
-)
+#install_data(
+#  'gshot.1',
+#  install_dir: join_paths(get_option('mandir'), 'man1')
+#)
 
 subdir('icons')
