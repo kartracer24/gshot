@@ -31,7 +31,7 @@ source=(
   "https://github.com/kartracer24/gshot/raw/master/bin/gshot-$pkgver.tar.gz"
 )
 sha256sums=(
-  '7a37865c67b4231c8af506062ad6d5671d8b315b81dbf1b661937b7ebbf4e421'
+  'f1b0a0501a28937c01b183932b4835166dc8a846c98d12a3031e5a40bd83eaa8'
 )
 
 build() {
