@@ -1,7 +1,7 @@
 project(
   'gshot',
   'c',
-  version: '41.0',
+  version: 'alpha2',
   license: 'GPLv2+',
   meson_version: '>= 0.59.0',
   default_options: [
