@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=GShot
-Comment=Save images of your screen or individual windows
+Comment=Capture images of your screen
 # Translators: Search terms to find this application. Do NOT translate or localize the semicolons! The list MUST also end with a semicolon!
 Keywords=snapshot;capture;print;screenshot;
 Exec=gshot --interactive
@@ -17,6 +17,6 @@ DBusActivatable=true
 Name=Take a Screenshot of the Whole Screen
 Exec=gshot
 
-[Desktop Action window-shot]
-Name=Take a Screenshot of the Current Window
-Exec=gshot -w
+#[Desktop Action window-shot]
+#Name=Take a Screenshot of the Current Window
+#Exec=gshot -w
