@@ -236,7 +236,16 @@ screenshot_config_parse_command_line (gboolean clipboard_arg,
       screenshot_config->take_window_shot = FALSE;
       screenshot_config->take_area_shot = TRUE;
     }
-  /* If neither is provided, keep the values from config file */
+  else if (interactive_arg)
+    {
+      /* Only use saved config values in interactive mode */
+    }
+  else
+    {
+      /* Non-interactive mode defaults to screen capture */
+      screenshot_config->take_window_shot = FALSE;
+      screenshot_config->take_area_shot = FALSE;
+    }
 
   return TRUE;
 }

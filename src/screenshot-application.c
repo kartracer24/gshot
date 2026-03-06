@@ -432,8 +432,7 @@ build_filename_ready_cb (GObject *source,
 
   if (save_path != NULL)
     {
-      g_autoptr(GFile) file = g_file_new_for_path (save_path);
-      self->save_uri = g_file_get_uri (file);
+      self->save_uri = g_strdup (save_path);
     }
   else
     self->save_uri = NULL;
@@ -534,7 +533,7 @@ finish_take_screenshot (ScreenshotApplication *self)
    */
   if (screenshot_config->file != NULL)
     {
-      self->save_uri = g_file_get_uri (screenshot_config->file);
+      self->save_uri = g_file_get_path (screenshot_config->file);
       self->should_overwrite = TRUE;
       screenshot_save_to_file (self);
     }

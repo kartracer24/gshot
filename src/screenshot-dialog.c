@@ -248,7 +248,7 @@ screenshot_dialog_new (GtkApplication *app,
   char *ext;
   gint pos;
 
-  tmp_file = g_file_new_for_uri (initial_uri);
+  tmp_file = g_file_new_for_commandline_arg (initial_uri);
   parent_file = g_file_get_parent (tmp_file);
 
   current_name = g_file_get_basename (tmp_file);
