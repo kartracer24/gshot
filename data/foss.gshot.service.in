@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=foss.gshot
+Exec=@bindir@/gshot --gapplication-service

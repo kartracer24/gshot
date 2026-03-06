@@ -23,7 +23,7 @@
 
 G_BEGIN_DECLS
 
-#define SCREENSHOT_ICON_NAME "org.gnome.Screenshot"
+#define SCREENSHOT_ICON_NAME "foss.gshot"
 
 typedef void (*ScreenshotResponseFunc) (gint     response,
                                         gpointer user_data);

@@ -1,23 +1,22 @@
 [Desktop Entry]
-Name=Screenshot
-Comment=Save images of your screen or individual windows
+Name=GShot
+Comment=Capture images of your screen
 # Translators: Search terms to find this application. Do NOT translate or localize the semicolons! The list MUST also end with a semicolon!
 Keywords=snapshot;capture;print;screenshot;
-Exec=gnome-screenshot --interactive
+Exec=gshot --interactive
 Terminal=false
 Type=Application
 # Translators: Do NOT translate or transliterate this text (this is an icon file name)!
-Icon=org.gnome.Screenshot
+Icon=foss.gshot
 StartupNotify=true
-Categories=GTK;GNOME;Utility;X-GNOME-Utilities;
-NotShowIn=KDE;
+Categories=GTK;Utility;
 Actions=screen-shot;window-shot;
 DBusActivatable=true
 
 [Desktop Action screen-shot]
 Name=Take a Screenshot of the Whole Screen
-Exec=gnome-screenshot
+Exec=gshot
 
-[Desktop Action window-shot]
-Name=Take a Screenshot of the Current Window
-Exec=gnome-screenshot -w
+#[Desktop Action window-shot]
+#Name=Take a Screenshot of the Current Window
+#Exec=gshot -w

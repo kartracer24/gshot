@@ -120,7 +120,7 @@ build_path (AsyncExistenceJob *job)
   if (job->screenshot_origin == NULL)
     {
       g_autoptr(GDateTime) d = g_date_time_new_now_local ();
-      origin = g_date_time_format (d, "%Y-%m-%d %H-%M-%S");
+      origin = g_date_time_format (d, "%Y-%m-%d-%H-%M-%S");
     }
   else
     origin = g_strdup (job->screenshot_origin);
@@ -129,7 +129,7 @@ build_path (AsyncExistenceJob *job)
     {
       /* translators: this is the name of the file that gets made up with the
        * screenshot if the entire screen is taken. The first placeholder is a
-       * timestamp (e.g. "2017-05-21 12-24-03"); the second placeholder is the
+       * timestamp (e.g. "2017-05-21-12-24-03"); the second placeholder is the
        * file format (e.g. "png").
        */
       file_name = g_strdup_printf (_("Screenshot from %s.%s"), origin, file_type);
@@ -139,10 +139,10 @@ build_path (AsyncExistenceJob *job)
       /* translators: this is the name of the file that gets made up with the
        * screenshot if the entire screen is taken and the simpler filename
        * already exists. The first and second placeholders are a timestamp and
-       * a counter to make it unique (e.g. "2017-05-21 12-24-03 - 2"); the third
+       * a counter to make it unique (e.g. "2017-05-21-12-24-03-2"); the third
        * placeholder is the file format (e.g. "png").
        */
-      file_name = g_strdup_printf (_("Screenshot from %s - %d.%s"), origin, job->iteration, file_type);
+      file_name = g_strdup_printf (_("Screenshot from %s-%d.%s"), origin, job->iteration, file_type);
     }
 
   return g_build_filename (base_path, file_name, NULL);
