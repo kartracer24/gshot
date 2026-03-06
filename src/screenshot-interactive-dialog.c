@@ -174,7 +174,7 @@ screenshot_interactive_dialog_init (ScreenshotInteractiveDialog *self)
   GtkWidget *title_bar = gtk_header_bar_new ();
   gtk_window_set_titlebar(GTK_WINDOW (self), title_bar);
 
-  gtk_window_set_title (GTK_WINDOW (self), _("Screenshot"));
+  gtk_window_set_title (GTK_WINDOW (self), _("GShot"));
   gtk_window_set_default_size (GTK_WINDOW (self), 320, 280);
 
   box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 12);
