@@ -19,6 +19,7 @@ depends=(
   gtk4
   hicolor-icon-theme
   wayland
+  wayland-protocols
 )
 makedepends=(
   appstream
