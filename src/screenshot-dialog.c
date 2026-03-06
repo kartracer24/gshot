@@ -285,14 +285,12 @@ screenshot_dialog_get_uri (ScreenshotDialog *self)
 {
   g_autofree gchar *folder = NULL;
   const gchar *file_name;
-  gchar *file;
   gchar *tmp;
 
   folder = screenshot_dialog_get_folder (self);
   file_name = gtk_editable_get_text (GTK_EDITABLE (self->filename_entry));
-  file = g_uri_escape_string (file_name, NULL, FALSE);
 
-  tmp = g_build_filename (folder, file, NULL);
+  tmp = g_build_filename (folder, file_name, NULL);
 
   return tmp;
 }
